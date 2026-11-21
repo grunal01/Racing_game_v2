@@ -2,14 +2,14 @@
 
 A fresh start after v17. The old game (v15 to v17) stays as an archive in `grunal01/racing-roguelike` (v17 is on branch `claude/v17-visuals`). We go slowly: one small step per branch, merged only after it has been played. See the project's rebuild plan.
 
-**Current step: R1, the jungle loop.** One banked loop (two straights, two 180° bends) with four labelled jungle designs, A to D, so we can compare looks and get the driving right.
+**Current step: R1.1, physics.** (R1: the jungle loop.) One banked loop (two straights, two 180° bends) with four labelled jungle designs, A to D, so we can compare looks and get the driving right.
 
 ## Layout
 | File | What it is |
 |---|---|
 | `index.html` | Page, HUD and styles |
 | `js/track.js` | The loop: samples along the centre line, banking, road meshes, and `surface(x, z)` (the ground under any point) |
-| `js/car.js` | Car physics (grip-limited arcade, drift and boost) and visuals; `Car.DEF` holds the default handling numbers |
+| `js/car.js` | Car physics (two axles, tyre grip that fades past the limit, weight transfer, brake-to-drift, drift catch) and visuals; `Car.DEF` holds the default handling numbers |
 | `js/scenery.js` | The four jungle designs and their signs |
 | `js/tuning.js` | Tuning panel (Tab): every handling, camera and track number, live |
 | `js/main.js` | Scene, light, camera, input, laps |

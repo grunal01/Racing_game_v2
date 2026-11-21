@@ -2,12 +2,15 @@
 const Tuning = (function () {
   // [key, label, min, max, step, group]
   const SPEC = [
-    ['topSpeed', 'Top speed (m/s)', 20, 90, 1, 'Driving'], ['accel', 'Acceleration', 5, 45, 0.5, 'Driving'], ['brake', 'Brakes', 10, 80, 1, 'Driving'],
-    ['coast', 'Coasting drag', 0, 1.5, 0.05, 'Driving'], ['steerRate', 'Steering', 0.6, 4, 0.05, 'Driving'], ['steerFall', 'Steering at speed (higher = sharper)', 10, 120, 1, 'Driving'],
-    ['steerEase', 'Steering response', 2, 20, 0.5, 'Driving'], ['yawEase', 'Turn-in response', 2, 25, 0.5, 'Driving'],
-    ['grip', 'Grip limit', 10, 70, 0.5, 'Grip and drift'], ['gripStiff', 'Grip bite', 2, 25, 0.5, 'Grip and drift'], ['bankGrip', 'Extra grip on banks', 0, 4, 0.1, 'Grip and drift'],
-    ['driftGrip', 'Grip while drifting', 0.1, 1, 0.02, 'Grip and drift'], ['driftYaw', 'Turn while drifting', 1, 2.5, 0.05, 'Grip and drift'],
-    ['boostTime', 'Drift boost length (s)', 0, 3, 0.1, 'Grip and drift'], ['boostPower', 'Drift boost power', 0, 30, 1, 'Grip and drift'],
+    ['topSpeed', 'Top speed (m/s)', 20, 90, 1, 'Driving'], ['accel', 'Acceleration', 5, 40, 0.5, 'Driving'], ['brake', 'Brakes', 10, 70, 1, 'Driving'],
+    ['reverse', 'Reverse', 2, 20, 0.5, 'Driving'], ['steerLock', 'Steering lock', 0.2, 1, 0.01, 'Driving'], ['steerSpeed', 'Steering speed', 1, 15, 0.25, 'Driving'],
+    ['steerFall', 'Steering kept at speed (higher = sharper)', 10, 150, 1, 'Driving'],
+    ['gripF', 'Front grip', 0.6, 5, 0.05, 'Grip and drift'], ['gripR', 'Rear grip (lower = drifts more)', 0.6, 5, 0.05, 'Grip and drift'],
+    ['tyrePeak', 'Tyre bite (how fast grip builds)', 2, 20, 0.5, 'Grip and drift'], ['tyreFade', 'Slide falloff (higher = grip drops more past the limit)', 1, 1.9, 0.01, 'Grip and drift'],
+    ['weightShift', 'Weight shift on brakes (higher = brake drifts)', 0, 1.2, 0.02, 'Grip and drift'], ['brakeRear', 'Rear brake share', 0, 1, 0.02, 'Grip and drift'],
+    ['yawInertia', 'Rotation weight (higher = lazier spins)', 0.5, 5, 0.05, 'Grip and drift'],
+    ['driftMax', 'Drift angle held (degrees)', 10, 70, 1, 'Grip and drift'], ['driftCatch', 'Drift catch (higher = harder to spin)', 0, 20, 0.5, 'Grip and drift'], ['traction', 'Traction control (lower = less wheelspin)', 0.2, 1, 0.02, 'Grip and drift'],
+    ['downforce', 'Downforce at speed', 0, 3, 0.05, 'Grip and drift'], ['bankGrip', 'Extra grip on banks', 0, 4, 0.1, 'Grip and drift'],
     ['offTop', 'Grass top speed (x)', 0.2, 1, 0.02, 'Grip and drift'], ['offGrip', 'Grass grip (x)', 0.2, 1, 0.02, 'Grip and drift'],
     ['camDist', 'Camera distance', 4, 20, 0.25, 'Camera'], ['camHeight', 'Camera height', 1, 10, 0.1, 'Camera'], ['camLag', 'Camera follow speed', 1, 20, 0.5, 'Camera'],
     ['camLook', 'Look ahead', 0, 20, 0.5, 'Camera'], ['fov', 'Field of view', 40, 90, 1, 'Camera'], ['fovBoost', 'Extra view at speed', 0, 30, 1, 'Camera'],
@@ -16,8 +19,8 @@ const Tuning = (function () {
   const TRACK_KEYS = ['BANK', 'R', 'L', 'W'];
   let T = {}, el = null, onTrack = null;
   function defaults() { return Object.assign({}, Car.DEF, { BANK: Track.defaults.BANK, R: Track.defaults.R, L: Track.defaults.L, W: Track.defaults.W }); }
-  function load() { T = defaults(); try { Object.assign(T, JSON.parse(localStorage.getItem('r1_tune') || '{}')); } catch (e) {} return T; }
-  function save() { try { localStorage.setItem('r1_tune', JSON.stringify(T)); } catch (e) {} }
+  function load() { T = defaults(); try { Object.assign(T, JSON.parse(localStorage.getItem('r11_tune') || '{}')); } catch (e) {} return T; }
+  function save() { try { localStorage.setItem('r11_tune', JSON.stringify(T)); } catch (e) {} }
   const trackOpts = () => ({ BANK: T.BANK, R: T.R, L: T.L, W: T.W });
   function changed() { const d = defaults(), o = {}; for (const k in T) if (Math.abs(T[k] - d[k]) > 1e-9) o[k] = T[k]; return o; }
   function render() {
@@ -35,7 +38,7 @@ const Tuning = (function () {
       inp.addEventListener('keydown', e => { if (e.code === 'Tab') { e.preventDefault(); toggle(); } });
     });
     el.querySelector('#tCopy').onclick = () => {
-      const txt = 'R1 tuning: ' + JSON.stringify(changed()), ta = el.querySelector('#tOut'); ta.value = txt; ta.style.display = 'block'; ta.select();
+      const txt = 'R1.1 tuning: ' + JSON.stringify(changed()), ta = el.querySelector('#tOut'); ta.value = txt; ta.style.display = 'block'; ta.select();
       try { navigator.clipboard.writeText(txt).catch(() => {}); } catch (e) {}
     };
     el.querySelector('#tReset').onclick = () => { T = Object.assign(T, defaults()); save(); render(); if (onTrack) onTrack(trackOpts()); };
