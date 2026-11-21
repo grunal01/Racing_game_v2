@@ -3,7 +3,7 @@
 // (away from the infield), and how steeply the road is banked there. Everything else (meshes, the car's ground) is built from that.
 const Track = (function () {
   const D = { L: 220, R: 55, W: 14, KERB: 1.4, BANK: 22, RAMP: 34 };   // straight length, bend radius, road width, kerb width (m), bank (degrees), bank ramp length (m)
-  const BASE = 0.06, SKIRT = 0.7;                                      // road sits a hair above the ground; banking falls away outside at this slope
+  const BASE = 0.06, SKIRT = 0.38;                                      // road sits a hair above the ground; banking falls away outside at this slope
   let P = Object.assign({}, D), S = [], LEN = 0, group = null;
   const sstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
@@ -47,14 +47,19 @@ const Track = (function () {
       const c = i; best = Infinity;
       for (let k = -12; k <= 24; k++) { const j = (c + k + S.length) % S.length, d = (S[j].x - x) ** 2 + (S[j].z - z) ** 2; if (d < best) { best = d; i = j; } }
     }
-    const m = S[i], u = (x - m.x) * m.ox + (z - m.z) * m.oz, b = m.b, E = EDGE();
-    const out = { i, u, onRoad: false, kerb: false, y: 0, nx: 0, ny: 1, nz: 0, zone: m.zone };
+    // blend between the nearest sample and its neighbour on the side the point lies, so height and tilt change smoothly (no steps)
+    const m0 = S[i], along = (x - m0.x) * m0.hx + (z - m0.z) * m0.hz, j = (i + (along >= 0 ? 1 : -1) + S.length) % S.length, m1 = S[j];
+    const seg = Math.hypot(m1.x - m0.x, m1.z - m0.z) || 1, t = Math.min(1, Math.abs(along) / seg);
+    const cx = m0.x + (m1.x - m0.x) * t, cz = m0.z + (m1.z - m0.z) * t, b = m0.b + (m1.b - m0.b) * t;
+    let ox = m0.ox + (m1.ox - m0.ox) * t, oz = m0.oz + (m1.oz - m0.oz) * t; const ol = Math.hypot(ox, oz) || 1; ox /= ol; oz /= ol;
+    const u = (x - cx) * ox + (z - cz) * oz, E = EDGE();
+    const out = { i, u, onRoad: false, kerb: false, y: 0, nx: 0, ny: 1, nz: 0, zone: m0.zone, b };
     if (Math.abs(u) <= E) {
       out.y = roadY(u, b); out.onRoad = true; out.kerb = Math.abs(u) > P.W / 2;
-      out.nx = -m.ox * Math.sin(b); out.ny = Math.cos(b); out.nz = -m.oz * Math.sin(b);
+      out.nx = -ox * Math.sin(b); out.ny = Math.cos(b); out.nz = -oz * Math.sin(b);
     } else if (u > E) {
       const top = roadY(E, b), y = top - (u - E) * SKIRT;
-      if (y > 0) { const a = Math.atan(SKIRT); out.y = y; out.nx = m.ox * Math.sin(a); out.ny = Math.cos(a); out.nz = m.oz * Math.sin(a); }
+      if (y > 0) { const a = Math.atan(SKIRT); out.y = y; out.nx = ox * Math.sin(a); out.ny = Math.cos(a); out.nz = oz * Math.sin(a); }
     }
     return out;
   }

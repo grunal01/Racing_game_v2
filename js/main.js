@@ -93,7 +93,7 @@
     requestAnimationFrame(frame);
     const dt = Math.min(0.1, (now - last) / 1000 || 0); last = now; acc += dt;
     T = Tuning.T;
-    const inp = { throttle: down('KeyW', 'ArrowUp'), brake: down('KeyS', 'ArrowDown'), steer: (down('KeyD', 'ArrowRight') ? 1 : 0) - (down('KeyA', 'ArrowLeft') ? 1 : 0), drift: down('Space', 'ShiftLeft', 'ShiftRight') };
+    const inp = { throttle: down('KeyW', 'ArrowUp'), brake: down('KeyS', 'ArrowDown'), steer: (down('KeyD', 'ArrowRight') ? 1 : 0) - (down('KeyA', 'ArrowLeft') ? 1 : 0) };
     let n = 0; const prev = { x: car.x, y: car.y, z: car.z, yaw: car.yaw };
     while (acc >= STEP && n < 12) { prev.x = car.x; prev.y = car.y; prev.z = car.z; prev.yaw = car.yaw; Car.step(car, T, inp, STEP); acc -= STEP; n++; }
     if (n >= 12) acc = 0;
@@ -103,7 +103,7 @@
     car.x = sx; car.y = sy; car.z = sz; car.yaw = syaw;
     sun.position.set(ix + 60, 110, iz + 35); sun.target.position.set(ix, 0, iz);
     updateLap(now); hud(now, inp, dt);
-    Sfx.update({ speed: car.speed, top: T.topSpeed, throttle: inp.throttle, slip: car.slip, onRoad: car.ground && car.ground.onRoad, boost: car.boostT > 0 });
+    Sfx.update({ speed: car.speed, top: T.topSpeed, throttle: inp.throttle, slip: car.slip, onRoad: car.ground && car.ground.onRoad, boost: false });
     renderer.render(scene, camera);
   }
   let lastHud = '';
@@ -113,9 +113,8 @@
     if (html !== lastHud) { $('zone').innerHTML = html; lastHud = html; }
     $('speed').textContent = Math.round(Math.abs(car.speed) * 3.6);
     $('laps').innerHTML = 'Lap <b>' + fmt(lap.t0 === null ? null : now - lap.t0) + '</b><br>Last ' + fmt(lap.last) + '<br>Best ' + fmt(lap.best);
-    const d = $('drift'); d.style.opacity = car.drifting || car.boostT > 0 ? 1 : 0;
-    d.textContent = car.boostT > 0 ? 'BOOST' : 'DRIFT ' + '■'.repeat(Math.min(5, Math.floor(car.driftT / 0.35)));
-    d.className = car.boostT > 0 ? 'boost' : car.driftT > 0.7 ? 'ready' : '';
+    const d = $('drift'); d.style.opacity = car.driftT > 0.15 ? 1 : 0;
+    if (car.driftT > 0.15) { d.textContent = 'DRIFT ' + Math.round(Math.abs(car.slipR) * 57) + '°'; d.className = car.driftT > 1 ? 'ready' : ''; }
     if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').style.opacity = 0; }
   }
   function fillCarSelect() { $('carSel').innerHTML = carNames.map((n, i) => '<option value="' + i + '"' + (i === carIdx ? ' selected' : '') + '>' + n + '</option>').join(''); }

@@ -16,7 +16,7 @@ const Scenery = (function () {
     const S = Track.S.filter(m => m.zone === zone), E = Track.EDGE(), out = [];
     for (let t = 0; t < n; t++) {
       const m = S[Math.floor(R() * S.length)];
-      const clear = side > 0 ? E + (0.06 + 2 * E * Math.tan(m.b)) / 0.7 + 1.5 : E + 1;
+      const clear = side > 0 ? E + (0.06 + 2 * E * Math.tan(m.b)) / 0.38 + 1.5 : E + 1;
       const u = side * (clear + lat0 + R() * (lat1 - lat0));
       out.push({ x: m.x + m.ox * u, z: m.z + m.oz * u, m });
     }
@@ -52,7 +52,7 @@ const Scenery = (function () {
     const words = z.note.split(' '); let line = '', y = 250; for (const w of words) { if (g.measureText(line + w).width > 740) { g.fillText(line, 232, y); line = ''; y += 46; } line += w + ' '; } g.fillText(line, 232, y);
     const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
     const board = new THREE.Mesh(new THREE.PlaneGeometry(12, 4.5), new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
-    const E = Track.EDGE(), u = E + (0.06 + 2 * E * Math.tan(m.b)) / 0.7 + 4;
+    const E = Track.EDGE(), u = E + (0.06 + 2 * E * Math.tan(m.b)) / 0.38 + 4;
     for (const side of [1, -1]) {
       const sg = new THREE.Group(), b = board.clone(); b.position.y = 6.5; sg.add(b);
       for (const dx of [-5, 5]) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.4, 6, 0.4), new THREE.MeshLambertMaterial({ color: 0x3a2a1c })); post.position.set(dx, 3, 0); post.castShadow = true; sg.add(post); }
