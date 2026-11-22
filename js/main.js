@@ -108,7 +108,7 @@
   let lastHud = '';
   function hud(now, inp, dt) {
     const z = car.ground ? car.ground.zone : 'A', Z = Scenery.ZONES[z];
-    const html = '<div class="zLetter">' + z + '</div><div><div class="zName">' + Z.name + '</div><div class="zNote">' + Z.note + '</div></div>';
+    const html = '<div class="zLetter">' + z + '</div><div><div class="zName">' + Z.name + ' · corner bank ' + ('ABCD'.indexOf(z) * Track.P.BANK) + '°</div><div class="zNote">' + Z.note + '</div></div>';
     if (html !== lastHud) { $('zone').innerHTML = html; lastHud = html; }
     $('speed').textContent = Math.round(Math.abs(car.speed) * 3.6);
     $('laps').innerHTML = 'Lap <b>' + fmt(lap.t0 === null ? null : now - lap.t0) + '</b><br>Last ' + fmt(lap.last) + '<br>Best ' + fmt(lap.best);
