@@ -4,18 +4,10 @@ const Tuning = (function () {
   // the 'Main' group is the handful worth touching first; everything else sits under Advanced
   const SPEC = [
     ['topSpeed', 'Top speed (m/s)', 20, 90, 1, 'Main'], ['turnRate', 'Steering', 0.5, 4, 0.05, 'Main'],
-    ['grip', 'Grip (lower = slides more in normal turns)', 0.5, 20, 0.1, 'Main'],
-    ['driftAngle', 'Drift angle (how sideways the kart sits, degrees)', 5, 60, 1, 'Main'],
-    ['driftTight', 'Tightest drift: steer into the turn (radius, m)', 10, 80, 1, 'Main'],
-    ['driftWide', 'Widest drift: steer the other way (radius, m)', 40, 300, 5, 'Main'],
-    ['boostPower', 'Mini-turbo strength', 0, 30, 1, 'Main'],
+    ['grip', 'Grip (lower = slides more)', 0.5, 20, 0.1, 'Main'], ['slideMax', 'Most sideways a slide gets (degrees)', 5, 70, 1, 'Main'], ['slideHold', 'Big slides carry further', 0, 0.9, 0.05, 'Main'],
     ['accel', 'Acceleration', 4, 40, 0.5, 'Engine and brakes'], ['brake', 'Brakes', 5, 70, 1, 'Engine and brakes'], ['reverse', 'Reverse', 2, 20, 0.5, 'Engine and brakes'],
     ['turnFall', 'Steering kept at speed (higher = sharper at speed)', 15, 300, 5, 'Steering'], ['steerSpeed', 'Steering response', 1, 15, 0.25, 'Steering'],
-    ['slideMax', 'Most sideways a normal slide gets (degrees)', 5, 70, 1, 'Sliding'], ['slideHold', 'Big slides carry further', 0, 0.9, 0.05, 'Sliding'],
     ['slideScrub', 'Speed lost while sliding', 0, 1, 0.02, 'Sliding'], ['offGrip', 'Grass grip (x)', 0.2, 1, 0.02, 'Sliding'], ['offTop', 'Grass top speed (x)', 0.2, 1, 0.02, 'Sliding'],
-    ['driftEase', 'Steering needed to start a drift', 0.1, 1, 0.05, 'Drift'], ['driftMinSpeed', 'Slowest speed for a drift (m/s)', 5, 40, 1, 'Drift'],
-    ['driftBrake', 'Brake strength while drifting (x)', 0, 1, 0.05, 'Drift'], ['straighten', 'Time to straighten after a drift (s)', 0.1, 1, 0.05, 'Drift'],
-    ['boostAt', 'Drift time for a mini-turbo (s, double it for a big one)', 0.3, 3, 0.1, 'Drift'], ['boostTime', 'Mini-turbo length (s)', 0.2, 2, 0.05, 'Drift'],
     ['suspStiff', 'Suspension stiffness', 10, 150, 1, 'Suspension'], ['suspDamp', 'Suspension damping', 0.5, 10, 0.1, 'Suspension'],
     ['suspTravel', 'Suspension travel (m)', 0.05, 0.6, 0.01, 'Suspension'], ['gravity', 'Gravity (higher = more planted)', 9, 40, 0.5, 'Suspension'],
     ['comY', 'Weight height (lower = harder to roll)', -1, 1, 0.05, 'Suspension'],
@@ -26,8 +18,8 @@ const Tuning = (function () {
   const TRACK_KEYS = ['BANK', 'R', 'L', 'W'];
   let T = {}, el = null, onTrack = null, advOpen = false;
   function defaults() { return Object.assign({}, Car.DEF, { BANK: Track.defaults.BANK, R: Track.defaults.R, L: Track.defaults.L, W: Track.defaults.W }); }
-  function load() { T = defaults(); try { Object.assign(T, JSON.parse(localStorage.getItem('r19_tune') || '{}')); } catch (e) {} return T; }
-  function save() { try { localStorage.setItem('r19_tune', JSON.stringify(T)); } catch (e) {} }
+  function load() { T = defaults(); try { Object.assign(T, JSON.parse(localStorage.getItem('r110_tune') || '{}')); } catch (e) {} return T; }
+  function save() { try { localStorage.setItem('r110_tune', JSON.stringify(T)); } catch (e) {} }
   const trackOpts = () => ({ BANK: T.BANK, R: T.R, L: T.L, W: T.W });
   function changed() { const d = defaults(), o = {}; for (const k in T) if (Math.abs(T[k] - d[k]) > 1e-9) o[k] = T[k]; return o; }
   function render() {
@@ -47,7 +39,7 @@ const Tuning = (function () {
       inp.addEventListener('keydown', e => { if (e.code === 'Tab') { e.preventDefault(); toggle(); } });
     });
     el.querySelector('#tCopy').onclick = () => {
-      const txt = 'R1.9 tuning: ' + JSON.stringify(changed()), ta = el.querySelector('#tOut'); ta.value = txt; ta.style.display = 'block'; ta.select();
+      const txt = 'R1.10 tuning: ' + JSON.stringify(changed()), ta = el.querySelector('#tOut'); ta.value = txt; ta.style.display = 'block'; ta.select();
       try { navigator.clipboard.writeText(txt).catch(() => {}); } catch (e) {}
     };
     el.querySelector('#tReset').onclick = () => { T = Object.assign(T, defaults()); save(); render(); if (onTrack) onTrack(trackOpts()); };
