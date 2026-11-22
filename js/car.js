@@ -7,9 +7,9 @@
 const Car = (function () {
   // every number here can be changed live in the tuning panel (Tab)
   const DEF = {
-    topSpeed: 50, accel: 15, brake: 26, reverse: 8,
-    turnRate: 1.8, turnFall: 100, steerSpeed: 5,
-    grip: 3.2, slideMax: 40, slideHold: 0.35, slideScrub: 0.12, offGrip: 0.6, offTop: 0.62,
+    topSpeed: 70, accel: 15, brake: 26, reverse: 8,
+    turnRate: 2, turnFall: 100, steerSpeed: 5,
+    grip: 3.2, slideMax: 50, slideHold: 0.35, slideScrub: 0.12, offGrip: 0.6, offTop: 0.62,
     suspStiff: 60, suspDamp: 4, suspTravel: 0.3, gravity: 20, comY: -0.4,
     camDist: 9.5, camHeight: 3.6, camLag: 7, camLook: 6, fov: 62, fovBoost: 14
   };
