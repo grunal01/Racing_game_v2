@@ -1,135 +1,161 @@
-// ===== Car: a Kenney model on simple two-axle physics =====
-// The car has a front and a rear axle. Each axle's tyres grip sideways up to a limit and then fade smoothly into a slide.
-// Braking or lifting shifts weight forward: the rear gets lighter, loses grip, and the car rotates into a drift, PolyTrack-style.
-// No drift button: S brakes, and once stopped it reverses. The rear wheels drive. Banking and downforce add grip.
+// ===== Car: a Kenney model on Rapier's raycast vehicle, kept pure =====
+// The same kind of car PolyTrack uses (Bullet's raycast vehicle; Rapier's controller is a port of it): a rigid-body chassis on four
+// spring wheels. There is no drift mode and no arcade helper. The car grips until the tyres reach their limit, then slides;
+// braking into a turn moves weight forward for real, so the rear gets lighter and can step out. S brakes; once stopped it reverses.
 const Car = (function () {
   // every number here can be changed live in the tuning panel (Tab)
   const DEF = {
-    topSpeed: 52, accel: 17, brake: 30, reverse: 9,
-    gripF: 4.2, gripR: 4.4, tyrePeak: 9, tyreFade: 1.25, driftMax: 32, driftCatch: 10, weightShift: 0.5, downforce: 0.7, bankGrip: 1.0,
-    steerLock: 0.5, steerSpeed: 5, steerFall: 45, yawInertia: 1.7, brakeRear: 0.5, traction: 0.55,
-    offTop: 0.62, offGrip: 0.6,
+    topSpeed: 55, accel: 15, brake: 22, reverse: 8,
+    steerLock: 0.55, steerFall: 28, steerSpeed: 5,
+    tyreGrip: 2.6, sideGrip: 1.0, rearGrip: 1.05, offGrip: 0.55, offTop: 0.62,
+    suspStiff: 60, suspDamp: 4, suspTravel: 0.3, gravity: 20, comY: -0.4,
     camDist: 9.5, camHeight: 3.6, camLag: 7, camLook: 6, fov: 62, fovBoost: 14
   };
-  const G = 22;          // gravity for slopes and air, a little stronger than real for a planted arcade feel (m/s²)
-  const GT = 9.81;       // gravity for tyre load: grip numbers above are in "g"
-  const A = 1.25, B = 1.35;   // centre of mass to front and rear axle (m)
+  const MASS = 1000, REST = 0.32;
 
   function create(scene, modelName) {
     const c = {
-      x: 0, y: 0, z: 0, yaw: 0, vx: 0, vz: 0, vy: 0, yawRate: 0, steer: 0, hint: -1, ground: null,
-      drifting: false, driftT: 0, boostT: 0, air: false, sus: 0, susV: 0, roll: 0, pitch: 0, wheelSpin: 0, ax: 0,
-      mesh: new THREE.Group(), body: new THREE.Group(), wheels: [], model: null, speed: 0, slip: 0, latA: 0, lonA: 0, slipR: 0, quat: new THREE.Quaternion()
+      x: 0, y: 0, z: 0, yaw: 0, vx: 0, vz: 0, speed: 0, steer: 0, hint: -1, ground: null, air: false,
+      drifting: false, driftT: 0, driftDir: 0, rearMul: 1, slipR: 0, slip: 0, latA: 0, lonA: 0,
+      mesh: new THREE.Group(), body: new THREE.Group(), wheels: [], model: null, rb: null, veh: null,
+      prev: { p: new THREE.Vector3(), q: new THREE.Quaternion() }, cur: { p: new THREE.Vector3(), q: new THREE.Quaternion() },
+      ix: 0, iy: 0, iz: 0, iyaw: 0, prevBrake: false
     };
     c.mesh.add(c.body); scene.add(c.mesh);
     setModel(c, modelName);
     return c;
   }
 
-  // swap the visible model; all cars share one length so handling stays comparable
+  // swap the visible model; all cars share one length so handling stays comparable. The physics wheels follow the model's wheels.
   function setModel(c, name) {
     if (c.model) c.body.remove(c.model);
     const src = Assets.car(name); if (!src) return;
     const m = src.clone(true), box = new THREE.Box3().setFromObject(m), size = box.getSize(new THREE.Vector3());
     const k = 4.4 / Math.max(size.z, 0.01); m.scale.setScalar(k); m.position.y = -box.min.y * k;
     m.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-    c.wheels = [];
-    m.traverse(o => { if (/^wheel-/.test(o.name)) { o.rotation.order = 'YXZ'; c.wheels.push({ o, front: /front/.test(o.name), baseY: o.rotation.y, baseX: o.rotation.x, sgn: Math.cos(o.rotation.y) >= 0 ? 1 : -1 }); } });
-    c.model = m; c.body.add(m); c.name = name;
+    c.body.add(m); c.model = m; c.name = name; c.scale = k;
+    c.mesh.updateMatrixWorld(true);
+    // where the wheels are, in car space (metres), and how big they are
+    c.wheels = []; const inv = new THREE.Matrix4().copy(c.body.matrixWorld).invert();
+    m.traverse(o => {
+      if (!/^wheel-/.test(o.name)) return;
+      o.rotation.order = 'YXZ';
+      const wb = new THREE.Box3().setFromObject(o), ctr = wb.getCenter(new THREE.Vector3()).applyMatrix4(inv), r = (wb.max.y - wb.min.y) / 2 / (c.mesh.scale.y || 1);
+      c.wheels.push({ o, front: /front/.test(o.name), baseY: o.rotation.y, baseX: o.rotation.x, basePosY: o.position.y, sgn: Math.cos(o.rotation.y) >= 0 ? 1 : -1, at: ctr, r: Math.max(0.2, r) });
+    });
+    // fallback for any model without named wheels: four corners
+    if (c.wheels.length < 4) c.wheels = [[1, 1], [-1, 1], [1, -1], [-1, -1]].map(([sx, sz]) => ({ o: null, front: sz > 0, at: new THREE.Vector3(sx * size.x * k * 0.38, 0.38, sz * 4.4 * 0.32), r: 0.38 }));
+    c.dims = { hx: size.x * k / 2, hz: 2.2, h: size.y * k };
+    if (Phys.ready) buildBody(c);
+  }
+
+  function buildBody(c) {
+    const W = Phys.world;
+    const state = c.rb ? { p: c.rb.translation(), q: c.rb.rotation(), v: c.rb.linvel(), w: c.rb.angvel() } : null;
+    if (c.veh) { W.removeVehicleController(c.veh); c.veh = null; }
+    if (c.rb) { W.removeRigidBody(c.rb); c.rb = null; }
+    const d = c.dims, hy = Math.min(0.45, d.h * 0.3), wheelTop = Math.max(...c.wheels.map(w => w.at.y));
+    // mass sits low and the yaw inertia is generous, so the car is stable but can still rotate into a drift
+    const Ix = MASS / 12 * ((2 * hy) ** 2 + 4.4 ** 2), Iy = MASS / 12 * ((2 * d.hx) ** 2 + 4.4 ** 2) * 1.2, Iz = MASS / 12 * ((2 * hy) ** 2 + (2 * d.hx) ** 2);
+    const desc = RAPIER.RigidBodyDesc.dynamic().setCanSleep(false).setTranslation(0, 2, 0)
+      .setAdditionalMassProperties(MASS, { x: 0, y: (lastTune || DEF).comY, z: 0 }, { x: Ix, y: Iy, z: Iz }, { x: 0, y: 0, z: 0, w: 1 }).setAngularDamping(0.4);
+    c.rb = W.createRigidBody(desc);
+    // the body sits clear above the wheels and slides if it ever touches, so a squashed suspension never acts as a brake
+    W.createCollider(RAPIER.ColliderDesc.cuboid(d.hx * 0.92, hy, d.hz * 0.95).setTranslation(0, wheelTop + hy + 0.12, 0).setDensity(0).setFriction(0).setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min), c.rb);
+    const veh = W.createVehicleController(c.rb);
+    veh.indexUpAxis = 1; veh.setIndexForwardAxis = 2;
+    for (const w of c.wheels) veh.addWheel({ x: w.at.x, y: w.at.y + REST, z: w.at.z }, { x: 0, y: -1, z: 0 }, { x: -1, y: 0, z: 0 }, REST, w.r);
+    c.veh = veh; c._comY = (lastTune || DEF).comY; applyTuning(c, lastTune || DEF);
+    if (state) { c.rb.setTranslation(state.p, true); c.rb.setRotation(state.q, true); c.rb.setLinvel(state.v, true); c.rb.setAngvel(state.w, true); }
+  }
+  let lastTune = null, lastSig = '';
+  function applyTuning(c, T) {
+    const v = c.veh; if (!v) return;
+    for (let i = 0; i < c.wheels.length; i++) {
+      v.setWheelSuspensionStiffness(i, T.suspStiff); v.setWheelSuspensionCompression(i, T.suspDamp); v.setWheelSuspensionRelaxation(i, T.suspDamp * 1.2);
+      v.setWheelMaxSuspensionTravel(i, T.suspTravel); v.setWheelMaxSuspensionForce(i, 1e6);
+    }
+    lastTune = T; lastSig = T.suspStiff + ',' + T.suspDamp + ',' + T.suspTravel;
   }
 
   function place(c, x, z, yaw) {
-    Object.assign(c, { x, z, yaw, vx: 0, vz: 0, vy: 0, yawRate: 0, steer: 0, hint: -1, driftT: 0, boostT: 0, drifting: false, air: false, ax: 0 });
-    const g = Track.surface(x, z, -1); c.hint = g.i; c.y = g.y; c.ground = g; c.quatInit = false;
+    if (!c.rb) buildBody(c);
+    const g = Track.surface(x, z, -1), q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+    c.rb.setTranslation({ x, y: g.y + 0.5, z }, true); c.rb.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }, true);
+    c.rb.setLinvel({ x: 0, y: 0, z: 0 }, true); c.rb.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    Object.assign(c, { hint: g.i, ground: g, drifting: false, driftT: 0, steer: 0, speed: 0, vx: 0, vz: 0 });
+    readState(c); c.prev.p.copy(c.cur.p); c.prev.q.copy(c.cur.q);
   }
+  // give a velocity along the heading (used by tests and resets)
+  function setSpeed(c, v) { const f = forward(c); c.rb.setLinvel({ x: f.x * v, y: 0, z: f.z * v }, true); }
 
-  // tyre curve: grip rises with slip angle, peaks, then fades gently (never a hard on/off switch)
-  const tyre = (alpha, T) => Math.sin(T.tyreFade * Math.atan(T.tyrePeak * alpha));
+  const tq = new THREE.Quaternion(), tv = new THREE.Vector3();
+  function forward(c) { const r = c.rb.rotation(); return new THREE.Vector3(0, 0, 1).applyQuaternion(tq.set(r.x, r.y, r.z, r.w)); }
+  function readState(c) {
+    const p = c.rb.translation(), r = c.rb.rotation();
+    c.cur.p.set(p.x, p.y, p.z); c.cur.q.set(r.x, r.y, r.z, r.w);
+    const f = tv.set(0, 0, 1).applyQuaternion(c.cur.q); c.yaw = Math.atan2(f.x, f.z);
+    c.x = p.x; c.y = p.y; c.z = p.z;
+  }
 
   // one fixed physics step. input: { throttle, brake, steer (-1 left .. 1 right) }
   function step(c, T, inp, dt) {
+    if (lastSig !== T.suspStiff + ',' + T.suspDamp + ',' + T.suspTravel) applyTuning(c, T);
+    if (c._comY !== T.comY) { lastTune = T; buildBody(c); }
+    Phys.setGravity(T.gravity);
+    const v = c.veh, rb = c.rb, lv = rb.linvel(), r = rb.rotation();
+    tq.set(r.x, r.y, r.z, r.w);
+    const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(tq), right = new THREE.Vector3(-1, 0, 0).applyQuaternion(tq);
+    const u = lv.x * fwd.x + lv.y * fwd.y + lv.z * fwd.z, lat = lv.x * right.x + lv.y * right.y + lv.z * right.z, sp = Math.hypot(lv.x, lv.z);
     const g = Track.surface(c.x, c.z, c.hint); c.hint = g.i; c.ground = g;
     const off = !g.onRoad, top = T.topSpeed * (off ? T.offTop : 1);
-    // local frame: f = forward, l = left. yaw rate positive = turning left
-    const fx = Math.sin(c.yaw), fz = Math.cos(c.yaw), lx = Math.cos(c.yaw), lz = -Math.sin(c.yaw);
-    let u = c.vx * fx + c.vz * fz, w = c.vx * lx + c.vz * lz, r = c.yawRate;
+    let contacts = 0; for (let i = 0; i < c.wheels.length; i++) if (v.wheelIsInContact(i)) contacts++;
+    c.air = contacts === 0;
 
-    // steering: one quick ramp toward the input; a bit less lock at high speed so it stays stable
+    // steering: a steady ramp toward the input, and a speed-sensitive steering curve (less lock as speed rises)
     const rate = T.steerSpeed * dt; c.steer += Math.max(-rate, Math.min(rate, inp.steer - c.steer));
-    const delta = -c.steer * T.steerLock / (1 + Math.max(0, u) / T.steerFall);
+    const steerAngle = -c.steer * T.steerLock / (1 + Math.max(0, u) / T.steerFall);
 
-    // drive and brakes (longitudinal accelerations, per axle)
-    let FxF = 0, FxR = 0;
-    if (!c.air) {
-      if (inp.throttle) FxR += T.accel * 1.25 * Math.max(0, 1 - (Math.max(0, u) / top) ** 3);
-      if (inp.brake) {
-        if (u > 1) { FxF -= T.brake * (1 - T.brakeRear); FxR -= T.brake * T.brakeRear; }
-        else FxR -= T.reverse * Math.max(0, 1 - Math.max(0, -u) / 14);   // stopped: S drives backward
-      }
-      if (!inp.throttle && !inp.brake) FxR -= 0.35 * u;                    // engine braking when you lift
-      FxR -= 0.0015 * u * Math.abs(u) * (off ? 4 : 1);                      // air and ground drag
-      if (u > top) FxR -= (u - top) * 2;
+    // engine on the rear wheels, brakes on all four; once stopped, S drives backward
+    let engine = inp.throttle ? MASS * T.accel * Math.max(0, 1 - (Math.max(0, u) / top) ** 2) : 0, brake = 0;
+    if (inp.brake) { if (u > 1) brake = MASS * T.brake * dt; else engine = -MASS * T.reverse * Math.max(0, 1 - Math.max(0, -u) / 14); }
+    const rears = c.wheels.filter(w => !w.front).length || 2;
+    for (let i = 0; i < c.wheels.length; i++) {
+      const w = c.wheels[i];
+      v.setWheelSteering(i, w.front ? steerAngle : 0);
+      v.setWheelEngineForce(i, w.front ? 0 : engine / rears);
+      v.setWheelBrake(i, brake / c.wheels.length);
+      v.setWheelFrictionSlip(i, T.tyreGrip * (off ? T.offGrip : 1) * (w.front ? 1 : T.rearGrip));
+      v.setWheelSideFrictionStiffness(i, T.sideGrip);
     }
-    // load on each axle: static share, weight moves forward under braking, downforce and banking press harder
-    const press = (1 + T.downforce * (u / T.topSpeed) ** 2) * (1 + T.bankGrip * Math.sin(g.b || 0)) * (off ? T.offGrip : 1);
-    const shift = Math.max(-0.3, Math.min(0.05, T.weightShift * c.ax / GT));   // braking moves weight forward a lot; accelerating barely lightens the front
-    const NF = (B / (A + B) - shift) * press, NR = (A / (A + B) + shift) * press;
-    const capF = T.gripF * GT * NF, capR = T.gripR * GT * NR;
-    // friction circle: grip used for driving or braking isn't available for cornering
-    FxF = Math.max(-capF * 0.95, FxF); FxR = Math.max(-capR * 0.95, Math.min(capR * T.traction, FxR));   // traction control: power never takes all the rear grip
-    const latF = Math.sqrt(Math.max(0.05, capF * capF - FxF * FxF)), latR = Math.sqrt(Math.max(0.05, capR * capR - FxR * FxR));
+    // air resistance, plus the grass slowing you
+    const drag = (0.0005 * sp * sp + (off ? 0.4 * sp : 0)) * MASS * dt;
+    if (sp > 0.1) rb.applyImpulse({ x: -lv.x / sp * drag, y: 0, z: -lv.z / sp * drag }, true);
 
-    // slip angles and side forces
-    const us = Math.max(Math.abs(u), 5);
-    const aF = Math.atan2(w + A * r, us) - delta * Math.sign(u || 1), aR = Math.atan2(w - B * r, us);
-    let FyF = -latF * tyre(aF, T), FyR = -latR * tyre(aR, T);
-    if (c.air) { FyF = FyR = 0; FxF = FxR = 0; }
-
-    // integrate (per unit mass): forward, sideways, yaw
-    const cd = Math.cos(delta), sd = Math.sin(delta);
-    const du = FxR + FxF * cd - FyF * sd + r * w;
-    const dw = FyF * cd + FxF * sd + FyR - r * u;
-    const dr = (A * (FyF * cd + FxF * sd) - B * FyR) / T.yawInertia;
-    u += du * dt; w += dw * dt; r += dr * dt;
-    // drift catch: past the set drift angle the car is eased back, so a slide holds its angle instead of snapping into a spin
-    const over = Math.abs(aR) - T.driftMax * Math.PI / 180;
-    if (over > 0 && !c.air && Math.abs(u) > 6) r += Math.sign(aR) * over * T.driftCatch * 10 * dt;
-    if (Math.abs(u) < 3) { const k = Math.exp(-6 * dt); w *= k; if (!inp.steer) r *= k; }   // settle cleanly at walking pace
-    c.ax = c.ax + ((FxR + FxF) - c.ax) * Math.min(1, 10 * dt);                              // smoothed, for weight transfer
-
-    c.slipR = aR; c.drifting = !c.air && Math.abs(aR) > 0.12 && Math.abs(u) > 12;
-    c.driftT = c.drifting ? c.driftT + dt : 0;
-    c.slip = Math.max(0, Math.abs(aR) - 0.06) * Math.abs(u) + Math.max(0, Math.abs(aF) - 0.1) * Math.abs(u) * 0.5;
-    c.lonA = du; c.latA = u * r;
-
-    c.vx = fx * u + lx * w; c.vz = fz * u + lz * w; c.yawRate = r;
-    // gravity along the slope (pulls you down a bank or a hill)
-    if (!c.air) { c.vx += G * g.ny * g.nx * dt; c.vz += G * g.ny * g.nz * dt; }
-    c.yaw += r * dt;
-    c.x += c.vx * dt; c.z += c.vz * dt;
-    // vertical: stick to the ground, but leave it over a crest if moving up faster than the ground falls away
-    const g2 = Track.surface(c.x, c.z, c.hint);
-    if (c.air) { c.vy -= G * dt; c.y += c.vy * dt; if (c.y <= g2.y) { c.susV -= Math.min(6, -c.vy * 0.25); c.y = g2.y; c.vy = 0; c.air = false; } }
-    else { const vyG = (g2.y - c.y) / dt; if (c.vy > vyG + 4 && c.vy > 3) { c.air = true; } else { c.vy = vyG; c.y = g2.y; } }
-    c.speed = u;
+    v.updateVehicle(dt);
+    Phys.step();
+    readState(c);
+    const lv2 = rb.linvel(); c.vx = lv2.x; c.vz = lv2.z; c.speed = u;
+    const slide = sp > 2 && u > 0 ? Math.atan2(lat, u) : 0;
+    c.slipR = slide; c.drifting = Math.abs(slide) > 0.12 && sp > 12; c.driftT = c.drifting ? (c.driftT || 0) + dt : 0;
+    c.slip = Math.abs(Math.sin(slide)) * sp; c.latA = lat; c.lonA = engine / MASS;
   }
 
-  // visuals, every drawn frame: tilt eased to the ground, lean, pitch, suspension, wheels
-  const UP = new THREE.Vector3(0, 1, 0), tq = new THREE.Quaternion(), yq = new THREE.Quaternion(), nv = new THREE.Vector3();
-  function draw(c, dt) {
-    const g = c.ground || { nx: 0, ny: 1, nz: 0 };
-    c.mesh.position.set(c.x, c.y, c.z);
-    // the heading follows instantly (no lag on steering); only the tilt to the ground is eased, so bank changes feel smooth
-    tq.setFromUnitVectors(UP, nv.set(g.nx, g.ny, g.nz));
-    if (!c.quatInit) { c.quat.copy(tq); c.quatInit = true; } else c.quat.slerp(tq, Math.min(1, 14 * dt));
-    c.mesh.quaternion.copy(c.quat).multiply(yq.setFromAxisAngle(UP, c.yaw));
-    for (let n = Math.min(8, Math.ceil(dt / 0.008)), h = dt / n, k = 0; k < n; k++) { c.susV += (-180 * c.sus - 12 * c.susV) * h; c.sus += c.susV * h; }
-    c.roll += (Math.max(-0.08, Math.min(0.08, c.latA * 0.0035)) - c.roll) * Math.min(1, 8 * dt);
-    c.pitch += (Math.max(-0.05, Math.min(0.05, -c.lonA * 0.0022)) - c.pitch) * Math.min(1, 8 * dt);
-    c.body.rotation.set(c.pitch + c.sus * 0.05, 0, c.roll);
-    c.body.position.y = c.sus * 0.4;
-    c.wheelSpin += c.speed * dt / 0.45;
-    for (const w of c.wheels) { w.o.rotation.x = w.baseX + c.wheelSpin * w.sgn; if (w.front) w.o.rotation.y = w.baseY - c.steer * 0.45; }
+  function savePrev(c) { c.prev.p.copy(c.cur.p); c.prev.q.copy(c.cur.q); }
+
+  // visuals, every drawn frame: the body follows the physics (blended between steps), wheels follow suspension, spin and steering
+  const iq = new THREE.Quaternion(), ip = new THREE.Vector3(), fv = new THREE.Vector3();
+  function draw(c, dt, a) {
+    ip.lerpVectors(c.prev.p, c.cur.p, a); iq.slerpQuaternions(c.prev.q, c.cur.q, a);
+    c.mesh.position.copy(ip); c.mesh.quaternion.copy(iq);
+    fv.set(0, 0, 1).applyQuaternion(iq); c.ix = ip.x; c.iy = ip.y; c.iz = ip.z; c.iyaw = Math.atan2(fv.x, fv.z);
+    const v = c.veh; if (!v) return;
+    for (let i = 0; i < c.wheels.length; i++) {
+      const w = c.wheels[i]; if (!w.o) continue;
+      const len = v.wheelSuspensionLength(i); if (len !== null && len !== undefined) w.o.position.y = w.basePosY + (REST - len) / c.scale;
+      w.o.rotation.x = w.baseX + (v.wheelRotation(i) || 0) * w.sgn;
+      if (w.front) w.o.rotation.y = w.baseY + (v.wheelSteering(i) || 0);
+    }
   }
-  return { create, setModel, place, step, draw, DEF };
+  return { create, setModel, place, setSpeed, step, savePrev, draw, buildBody, DEF };
 })();

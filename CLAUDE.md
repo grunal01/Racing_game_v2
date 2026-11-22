@@ -1,1 +1,1 @@
-Read README.md for the layout. Never read vendor/three-bundle.js or js/assets.js (large generated files). Work in small steps agreed with Alex; default to a quick load check (no console errors, it drives) instead of heavy screenshot testing unless asked.
+Read README.md for the layout. Never read vendor/three-bundle.js, vendor/rapier.js or js/assets.js (large generated files). Work in small steps agreed with Alex; default to a quick load check (no console errors, it drives) instead of heavy screenshot testing unless asked.
