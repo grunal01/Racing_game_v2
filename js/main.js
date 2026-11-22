@@ -116,7 +116,7 @@
     if (car.drifting) { d.textContent = 'DRIFT ' + car.driftT.toFixed(1) + ' s'; d.className = car.driftT > 1.5 ? 'ready' : ''; }
     // live readout so it's easy to say what the car was doing when it felt wrong
     const slideDeg = Math.round(Math.abs(car.slipR) * 57.3), lim = !car.drifting && slideDeg > 4;
-    $('tele').innerHTML = '<b class="' + (car.drifting ? 'm-drift' : lim ? 'm-wide' : 'm-grip') + '">' + (car.air ? 'AIR' : car.drifting ? 'DRIFT' : lim ? 'SLIDING WIDE' : 'GRIP') + '</b> · slide ' + slideDeg + '° · ' + (car.ground && car.ground.onRoad ? 'road' : 'grass');
+    $('tele').innerHTML = '<b class="' + (car.drifting ? 'm-drift' : lim ? 'm-wide' : 'm-grip') + '">' + (car.air ? 'AIR' : car.drifting ? 'DRIFT' : lim ? 'SLIDING WIDE' : 'GRIP') + '</b> · slide ' + slideDeg + '° · bank ' + Math.round((car.ground ? car.ground.b : 0) * 57.3) + '° · ' + (car.ground && car.ground.onRoad ? 'road' : 'grass');
     if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').style.opacity = 0; }
   }
   function fillCarSelect() { $('carSel').innerHTML = carNames.map((n, i) => '<option value="' + i + '"' + (i === carIdx ? ' selected' : '') + '>' + n + '</option>').join(''); }

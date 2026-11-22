@@ -1,5 +1,5 @@
 // ===== Scenery: four labelled jungle designs, one per section of the loop =====
-// A = straight 1, B = bend 1, C = straight 2, D = bend 2. Each is a separate idea so we can compare them side by side.
+// Each zone is one straight plus the corner after it: A flat corner, B 10°, C 20°, D 30° bank. Each is a separate idea so we can compare them side by side.
 const Scenery = (function () {
   const ZONES = {
     A: { name: 'Rainforest wall', note: 'Tall dark trees and thick undergrowth packed tight to the road (Kenney Nature Kit)' },

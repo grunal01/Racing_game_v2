@@ -1,35 +1,37 @@
-// ===== Track: one loop, two straights and two banked 180° bends =====
+// ===== Track: a rounded square, four straights and four 90° corners, each corner banked more than the last =====
+// Corner A is flat, B is banked one step (10°), C two steps, D three, so you can feel what banking does to a slide.
 // The track is a list of samples, one per metre along the centre line. Each sample knows its position, which way is "out"
 // (away from the infield), and how steeply the road is banked there. Everything else (meshes, the car's ground) is built from that.
 const Track = (function () {
-  const D = { L: 220, R: 55, W: 14, KERB: 1.4, BANK: 22, RAMP: 80 };   // straight length, bend radius, road width, kerb width (m), bank (degrees), bank ramp length (m)
+  const D = { L: 120, R: 65, W: 14, KERB: 1.4, BANK: 10, RAMP: 70 };   // straight length, corner radius, road width, kerb width (m), extra bank per corner (degrees), bank ramp length (m)
   const BASE = 0.06, SKIRT = 0.38;                                      // road sits a hair above the ground; banking falls away outside at this slope
   let P = Object.assign({}, D), S = [], LEN = 0, group = null;
   const sstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
-  // sections in driving order; zone letters label the jungle designs that line each one
+  // sections in driving order: each zone is one straight then the corner after it. zone letters label the jungle designs
   function sections() {
-    const { L, R } = P;
-    return [
-      { zone: 'A', kind: 'straight', len: L, at: s => ({ x: -L / 2 + s, z: -R, hx: 1, hz: 0, ox: 0, oz: -1 }) },
-      { zone: 'B', kind: 'bend', len: Math.PI * R, at: s => { const a = -Math.PI / 2 + s / R; return { x: L / 2 + R * Math.cos(a), z: R * Math.sin(a), hx: -Math.sin(a), hz: Math.cos(a), ox: Math.cos(a), oz: Math.sin(a) }; } },
-      { zone: 'C', kind: 'straight', len: L, at: s => ({ x: L / 2 - s, z: R, hx: -1, hz: 0, ox: 0, oz: 1 }) },
-      { zone: 'D', kind: 'bend', len: Math.PI * R, at: s => { const a = Math.PI / 2 + s / R; return { x: -L / 2 + R * Math.cos(a), z: R * Math.sin(a), hx: -Math.sin(a), hz: Math.cos(a), ox: Math.cos(a), oz: Math.sin(a) }; } }
-    ];
+    const { L, R } = P, h = L / 2, C = [[h, -h], [h, h], [-h, h], [-h, -h]], out = [];
+    ['A', 'B', 'C', 'D'].forEach((zone, k) => {
+      const t = -Math.PI / 2 + k * Math.PI / 2, [cx, cz] = C[k], ox = Math.cos(t), oz = Math.sin(t), hx = -oz, hz = ox;
+      const ex = cx + R * ox, ez = cz + R * oz;   // where the straight meets the corner
+      out.push({ zone, kind: 'straight', len: L, at: s => ({ x: ex - hx * (L - s), z: ez - hz * (L - s), hx, hz, ox, oz }) });
+      out.push({ zone, kind: 'bend', bank: k, len: Math.PI / 2 * R, at: s => { const a = t + s / R; return { x: cx + R * Math.cos(a), z: cz + R * Math.sin(a), hx: -Math.sin(a), hz: Math.cos(a), ox: Math.cos(a), oz: Math.sin(a) }; } });
+    });
+    return out;
   }
 
   function sample() {
     S = []; let s0 = 0; const secs = sections(), bends = [];
-    for (const sec of secs) { if (sec.kind === 'bend') bends.push([s0, s0 + sec.len]); s0 += sec.len; }
+    for (const sec of secs) { if (sec.kind === 'bend') bends.push([s0, s0 + sec.len, sec.bank * P.BANK]); s0 += sec.len; }
     LEN = s0; s0 = 0;
     for (const sec of secs) {
       const n = Math.round(sec.len);
       for (let k = 0; k < n; k++) {
         const s = s0 + k * sec.len / n, q = sec.at(k * sec.len / n);
-        // bank: ramps in over the last part of the straight and the first part of the bend, and back out again
+        // bank: ramps in over the end of the straight and the start of the corner, and back out again
         let b = 0;
-        for (const [a, e] of bends) for (const w of [-LEN, 0, LEN]) { const into = Math.min(s + w - a, e - s - w); b = Math.max(b, sstep(-P.RAMP * 0.35, P.RAMP * 0.65, into)); }   // wraps across the start line, so there's no step where the loop joins
-        S.push(Object.assign(q, { s, zone: sec.zone, kind: sec.kind, b: b * P.BANK * Math.PI / 180 }));
+        for (const [a, e, deg] of bends) for (const w of [-LEN, 0, LEN]) { const into = Math.min(s + w - a, e - s - w); b = Math.max(b, sstep(-P.RAMP * 0.35, P.RAMP * 0.65, into) * deg); }   // wraps across the start line, so there's no step where the loop joins
+        S.push(Object.assign(q, { s, zone: sec.zone, kind: sec.kind, b: b * Math.PI / 180 }));
       }
       s0 += sec.len;
     }
@@ -103,7 +105,7 @@ const Track = (function () {
     const g = new THREE.Group(), m = S[4], white = new THREE.MeshLambertMaterial({ color: 0xffffff }), black = new THREE.MeshLambertMaterial({ color: 0x1c1c1c });
     for (let a = 0; a < 14; a++) for (let b = 0; b < 2; b++) {
       const t = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), (a + b) % 2 ? white : black); t.rotation.x = -Math.PI / 2;
-      t.position.set(m.x + b - 0.5, BASE + 0.02, m.z + m.oz * (a - 6.5)); g.add(t);
+      t.position.set(m.x + m.hx * (b - 0.5) + m.ox * (a - 6.5), BASE + 0.02, m.z + m.hz * (b - 0.5) + m.oz * (a - 6.5)); g.add(t);
     }
     const post = new THREE.MeshLambertMaterial({ color: 0x2a2a2a }), banner = new THREE.MeshLambertMaterial({ color: 0xf4c430 });
     for (const sd of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.6, 8, 0.6), post); p.position.set(m.x, 4, m.z + m.oz * sd * (EDGE() + 1.2)); p.castShadow = true; g.add(p); }
