@@ -11,7 +11,6 @@
     if (e.code === 'Tab') Tuning.toggle();
     if (e.code === 'KeyR') resetToRoad();
     if (e.code === 'KeyC') nextCar(e.shiftKey ? -1 : 1);
-    if (e.code === 'KeyM') toast(Sfx.toggle() ? 'Sound off' : 'Sound on');
   });
   addEventListener('keyup', e => { keys[e.code] = false; });
   addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
@@ -102,7 +101,6 @@
     updateCamera(dt, ix, iy, iz, iyaw);
     sun.position.set(ix + 60, 110, iz + 35); sun.target.position.set(ix, 0, iz);
     updateLap(now); hud(now, inp, dt);
-    Sfx.update({ speed: car.speed, top: T.topSpeed, throttle: inp.throttle, slip: car.slip, onRoad: car.ground && car.ground.onRoad, boost: false });
     renderer.render(scene, camera);
   }
   let lastHud = '';
@@ -130,7 +128,7 @@
     car = Car.create(scene, carNames[carIdx]); resetToRoad(true);
     fillCarSelect(); $('carSel').onchange = e => { carIdx = +e.target.value; nextCar(0); };
     $('loading').style.display = 'none'; $('start').style.display = 'flex';
-    $('go').onclick = () => { $('start').style.display = 'none'; running = true; Sfx.start(); lap.t0 = performance.now(); $('view').focus(); };
+    $('go').onclick = () => { $('start').style.display = 'none'; running = true; lap.t0 = performance.now(); $('view').focus(); };
     last = performance.now(); requestAnimationFrame(frame);
     window.__game = { car, Track, Scenery, keys, Phys };
   }

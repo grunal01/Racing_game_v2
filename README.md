@@ -14,7 +14,6 @@ A fresh start after v17. The old game (v15 to v17) stays as an archive in `gruna
 | `js/scenery.js` | The four jungle designs and their signs |
 | `js/tuning.js` | Tuning panel (Tab): every handling, camera and track number, live |
 | `js/main.js` | Scene, light, camera, input, laps |
-| `js/audio.js` | Engine and tyre sound (synthesized) |
 | `js/assets.loader.js` | Loads the packed Kenney models |
 | `assets/` | Kenney Car Kit and Nature Kit models in use (CC0) |
 | `vendor/three-bundle.js` | Three.js r160 (don't read or edit) |
