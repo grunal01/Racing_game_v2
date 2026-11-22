@@ -2,7 +2,7 @@
 // The track is a list of samples, one per metre along the centre line. Each sample knows its position, which way is "out"
 // (away from the infield), and how steeply the road is banked there. Everything else (meshes, the car's ground) is built from that.
 const Track = (function () {
-  const D = { L: 220, R: 55, W: 14, KERB: 1.4, BANK: 22, RAMP: 34 };   // straight length, bend radius, road width, kerb width (m), bank (degrees), bank ramp length (m)
+  const D = { L: 220, R: 55, W: 14, KERB: 1.4, BANK: 22, RAMP: 80 };   // straight length, bend radius, road width, kerb width (m), bank (degrees), bank ramp length (m)
   const BASE = 0.06, SKIRT = 0.38;                                      // road sits a hair above the ground; banking falls away outside at this slope
   let P = Object.assign({}, D), S = [], LEN = 0, group = null;
   const sstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };

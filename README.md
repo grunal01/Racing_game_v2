@@ -2,14 +2,14 @@
 
 A fresh start after v17. The old game (v15 to v17) stays as an archive in `grunal01/racing-roguelike` (v17 is on branch `claude/v17-visuals`). We go slowly: one small step per branch, merged only after it has been played. See the project's rebuild plan.
 
-**Current step: R1.5, Rapier vehicle physics.** (R1: the jungle loop.) One banked loop (two straights, two 180° bends) with four labelled jungle designs, A to D, so we can compare looks and get the driving right.
+**Current step: R1.6, pure raycast car (PolyTrack-style).** (R1: the jungle loop.) One banked loop (two straights, two 180° bends) with four labelled jungle designs, A to D, so we can compare looks and get the driving right.
 
 ## Layout
 | File | What it is |
 |---|---|
 | `index.html` | Page, HUD and styles |
 | `js/track.js` | The loop: samples along the centre line, banking, road meshes, and `surface(x, z)` (the ground under any point) |
-| `js/car.js` | The car on Rapier's raycast vehicle (chassis body, four spring wheels placed where the Kenney model's wheels are), plus arcade helpers: downforce, keep-upright, straight-line stability, and the drift rule. `Car.DEF` holds the default handling numbers |
+| `js/car.js` | The car on Rapier's raycast vehicle (a port of Bullet's, the kind PolyTrack uses): chassis body, four spring wheels placed where the Kenney model's wheels are, a speed-sensitive steering curve, engine and brakes. No drift mode or arcade helpers. `Car.DEF` holds the default handling numbers |
 | `js/physics.js` | The Rapier world: gravity, the track's collision mesh and the ground |
 | `js/scenery.js` | The four jungle designs and their signs |
 | `js/tuning.js` | Tuning panel (Tab): every handling, camera and track number, live |
