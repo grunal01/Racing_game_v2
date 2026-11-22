@@ -8,8 +8,8 @@ const Car = (function () {
   // every number here can be changed live in the tuning panel (Tab)
   const DEF = {
     topSpeed: 52, accel: 16, brake: 28, reverse: 9,
-    turnRate: 2.1, turnFall: 90, steerSpeed: 6,
-    grip: 14, cornerLimit: 34, bankGrip: 1.0, offTop: 0.62, offGrip: 0.6,
+    turnRate: 1.7, turnFall: 60, steerSpeed: 4.5,
+    grip: 10, cornerLimit: 34, bankGrip: 1.0, offTop: 0.62, offGrip: 0.6,
     driftEase: 0.45, driftKick: 0.5, driftTurn: 1.6, driftGrip: 1.6, driftMax: 45, driftScrub: 0.18, driftBrake: 0.3, driftMinSpeed: 14,
     camDist: 9.5, camHeight: 3.6, camLag: 7, camLook: 6, fov: 62, fovBoost: 14
   };

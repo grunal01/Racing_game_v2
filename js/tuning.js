@@ -18,8 +18,8 @@ const Tuning = (function () {
   const TRACK_KEYS = ['BANK', 'R', 'L', 'W'];
   let T = {}, el = null, onTrack = null;
   function defaults() { return Object.assign({}, Car.DEF, { BANK: Track.defaults.BANK, R: Track.defaults.R, L: Track.defaults.L, W: Track.defaults.W }); }
-  function load() { T = defaults(); try { Object.assign(T, JSON.parse(localStorage.getItem('r13_tune') || '{}')); } catch (e) {} return T; }
-  function save() { try { localStorage.setItem('r13_tune', JSON.stringify(T)); } catch (e) {} }
+  function load() { T = defaults(); try { Object.assign(T, JSON.parse(localStorage.getItem('r14_tune') || '{}')); } catch (e) {} return T; }
+  function save() { try { localStorage.setItem('r14_tune', JSON.stringify(T)); } catch (e) {} }
   const trackOpts = () => ({ BANK: T.BANK, R: T.R, L: T.L, W: T.W });
   function changed() { const d = defaults(), o = {}; for (const k in T) if (Math.abs(T[k] - d[k]) > 1e-9) o[k] = T[k]; return o; }
   function render() {
@@ -37,7 +37,7 @@ const Tuning = (function () {
       inp.addEventListener('keydown', e => { if (e.code === 'Tab') { e.preventDefault(); toggle(); } });
     });
     el.querySelector('#tCopy').onclick = () => {
-      const txt = 'R1.3 tuning: ' + JSON.stringify(changed()), ta = el.querySelector('#tOut'); ta.value = txt; ta.style.display = 'block'; ta.select();
+      const txt = 'R1.4 tuning: ' + JSON.stringify(changed()), ta = el.querySelector('#tOut'); ta.value = txt; ta.style.display = 'block'; ta.select();
       try { navigator.clipboard.writeText(txt).catch(() => {}); } catch (e) {}
     };
     el.querySelector('#tReset').onclick = () => { T = Object.assign(T, defaults()); save(); render(); if (onTrack) onTrack(trackOpts()); };
