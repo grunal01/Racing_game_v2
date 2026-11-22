@@ -113,8 +113,11 @@
     if (html !== lastHud) { $('zone').innerHTML = html; lastHud = html; }
     $('speed').textContent = Math.round(Math.abs(car.speed) * 3.6);
     $('laps').innerHTML = 'Lap <b>' + fmt(lap.t0 === null ? null : now - lap.t0) + '</b><br>Last ' + fmt(lap.last) + '<br>Best ' + fmt(lap.best);
-    const d = $('drift'); d.style.opacity = car.driftT > 0.15 ? 1 : 0;
-    if (car.driftT > 0.15) { d.textContent = 'DRIFT ' + Math.round(Math.abs(car.slipR) * 57) + '°'; d.className = car.driftT > 1 ? 'ready' : ''; }
+    const d = $('drift'); d.style.opacity = car.drifting ? 1 : 0;
+    if (car.drifting) { d.textContent = 'DRIFT ' + car.driftT.toFixed(1) + ' s'; d.className = car.driftT > 1.5 ? 'ready' : ''; }
+    // live readout so it's easy to say what the car was doing when it felt wrong
+    const slideDeg = Math.round(Math.abs(car.slipR) * 57.3), lim = !car.drifting && slideDeg > 4;
+    $('tele').innerHTML = '<b class="' + (car.drifting ? 'm-drift' : lim ? 'm-wide' : 'm-grip') + '">' + (car.air ? 'AIR' : car.drifting ? 'DRIFT' : lim ? 'SLIDING WIDE' : 'GRIP') + '</b> · slide ' + slideDeg + '° · ' + (car.ground && car.ground.onRoad ? 'road' : 'grass');
     if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').style.opacity = 0; }
   }
   function fillCarSelect() { $('carSel').innerHTML = carNames.map((n, i) => '<option value="' + i + '"' + (i === carIdx ? ' selected' : '') + '>' + n + '</option>').join(''); }

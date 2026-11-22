@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Racing Rebuild - R1.1 loop</title>
+<title>Racing Rebuild - R1.4 loop</title>
 <style>
 :root{color-scheme:dark}
 *{box-sizing:border-box}
@@ -17,7 +17,8 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d1a10;color:#fff;fon
 #speedBox{bottom:16px;right:16px;text-align:right}#speed{font:800 46px/1 system-ui;font-variant-numeric:tabular-nums}#speedBox small{color:#cfe8d2}
 #drift{position:fixed;bottom:110px;left:50%;transform:translateX(-50%);font:800 22px system-ui;letter-spacing:.04em;color:#ffe9a8;opacity:0;transition:opacity .15s;text-shadow:0 2px 8px rgba(0,0,0,.6)}
 #drift.ready{color:#7cf0ff}#drift.boost{color:#ff9a3c;font-size:30px}
-#help{bottom:16px;left:16px;font-size:13px;color:#dfeee0;max-width:min(560px,60vw)}#help kbd{background:rgba(255,255,255,.14);border-radius:4px;padding:0 5px;font:600 12px system-ui}
+#tele{bottom:16px;left:50%;transform:translateX(-50%);font-size:14px;font-variant-numeric:tabular-nums;white-space:nowrap}.m-grip{color:#9be7a0}.m-wide{color:#ffd166}.m-drift{color:#ff9a3c}
+#help{bottom:64px;left:16px;font-size:13px;color:#dfeee0;max-width:min(560px,60vw)}#help kbd{background:rgba(255,255,255,.14);border-radius:4px;padding:0 5px;font:600 12px system-ui}
 #carPick{top:96px;right:14px;font-size:13px}#carPick select{font:14px system-ui;background:#1c2a1e;color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:4px 6px;margin-left:6px}
 #toast{position:fixed;top:40%;left:50%;transform:translate(-50%,-50%);font:800 28px system-ui;opacity:0;transition:opacity .25s;text-shadow:0 2px 10px rgba(0,0,0,.6);pointer-events:none}
 #tuning{display:none;top:90px;left:14px;width:340px;max-height:calc(100vh - 200px);overflow:auto;font-size:13px}
@@ -40,11 +41,12 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d1a10;color:#fff;fon
 <div id="carPick" class="panel">Car <select id="carSel"></select></div>
 <div id="speedBox" class="panel"><div id="speed">0</div><small>km/h</small></div>
 <div id="drift"></div>
+<div id="tele" class="panel"></div>
 <div id="toast"></div>
-<div id="help" class="panel"><kbd>W</kbd> drive · <kbd>S</kbd> brake, then reverse · <kbd>A</kbd><kbd>D</kbd> steer · brake or lift into a turn to drift · <kbd>R</kbd> back on the road · <kbd>C</kbd> next car · <kbd>Tab</kbd> tuning · <kbd>M</kbd> sound</div>
+<div id="help" class="panel"><kbd>W</kbd> drive · <kbd>S</kbd> brake, then reverse · <kbd>A</kbd><kbd>D</kbd> steer · turn hard and tap the brake (or lift) to drift · steer into it to tighten, against it to straighten · <kbd>R</kbd> back on the road · <kbd>C</kbd> next car · <kbd>Tab</kbd> tuning · <kbd>M</kbd> sound</div>
 <div id="tuning" class="panel"></div>
-<div id="loading" class="overlay"><h1>R1.1 · Jungle loop</h1><p>Loading the Kenney models...</p><div id="loadWrap"><div id="loadBar"></div></div></div>
-<div id="start" class="overlay" style="display:none"><h1>R1.1 · Jungle loop</h1>
+<div id="loading" class="overlay"><h1>R1.4 · Jungle loop</h1><p>Loading the Kenney models...</p><div id="loadWrap"><div id="loadBar"></div></div></div>
+<div id="start" class="overlay" style="display:none"><h1>R1.4 · Jungle loop</h1>
   <p>One banked loop with four labelled jungle designs, A to D. Drive it, compare them, and tune the handling with <b>Tab</b>.</p>
   <button id="go">Drive</button></div>
 <script src="vendor/three-bundle.js"></script>
