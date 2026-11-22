@@ -13,6 +13,7 @@ A fresh start after v17. The old game (v15 to v17) stays as an archive in `gruna
 | `js/physics.js` | The Rapier world: gravity, the track's collision mesh and the ground |
 | `js/scenery.js` | The worlds (jungle, desert): four labelled designs each, one per zone, with live density / distance / size dials; also sky, haze and ground colours per world |
 | `js/tuning.js` | Tuning panel (Tab): every handling, camera and track number, live |
+| `js/workshop.js` + `workshop.html` | The Workshop: stretch, size, sink, tilt and tint any nature model, see its hitbox (Rapier convex hull, worked out after stretching), save named variants, lineup view, Copy all |
 | `js/main.js` | Scene, light, camera, input, laps |
 | `js/assets.loader.js` | Loads the packed Kenney models |
 | `assets/` | Kenney Car Kit and Nature Kit models in use (CC0) |
@@ -23,5 +24,5 @@ A fresh start after v17. The old game (v15 to v17) stays as an archive in `gruna
 ## Build
 ```
 python3 tools/pack_assets.py     # assets/ -> js/assets.js (generated, not committed)
-python3 tools/build_single.py    # -> dist/racing.html, the playable single file
+python3 tools/build_single.py    # -> dist/racing.html and dist/workshop.html, the playable single file
 ```
