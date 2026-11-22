@@ -2,7 +2,7 @@
 // The track is a list of samples, one per metre along the centre line. Each sample knows its position, which way is "out"
 // (away from the infield), and how steeply the road is banked there. Everything else (meshes, the car's ground) is built from that.
 const Track = (function () {
-  const D = { L: 220, R: 55, W: 14, KERB: 1.4, BANK: 22, RAMP: 34 };   // straight length, bend radius, road width, kerb width (m), bank (degrees), bank ramp length (m)
+  const D = { L: 220, R: 55, W: 14, KERB: 1.4, BANK: 22, RAMP: 80 };   // straight length, bend radius, road width, kerb width (m), bank (degrees), bank ramp length (m)
   const BASE = 0.06, SKIRT = 0.38;                                      // road sits a hair above the ground; banking falls away outside at this slope
   let P = Object.assign({}, D), S = [], LEN = 0, group = null;
   const sstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -28,7 +28,7 @@ const Track = (function () {
         const s = s0 + k * sec.len / n, q = sec.at(k * sec.len / n);
         // bank: ramps in over the last part of the straight and the first part of the bend, and back out again
         let b = 0;
-        for (const [a, e] of bends) { const into = Math.min(s - a, e - s); b = Math.max(b, sstep(-P.RAMP * 0.35, P.RAMP * 0.65, into)); }
+        for (const [a, e] of bends) for (const w of [-LEN, 0, LEN]) { const into = Math.min(s + w - a, e - s - w); b = Math.max(b, sstep(-P.RAMP * 0.35, P.RAMP * 0.65, into)); }   // wraps across the start line, so there's no step where the loop joins
         S.push(Object.assign(q, { s, zone: sec.zone, kind: sec.kind, b: b * P.BANK * Math.PI / 180 }));
       }
       s0 += sec.len;
@@ -126,5 +126,15 @@ const Track = (function () {
     scene.add(group);
     return { S, LEN, P };
   }
-  return { build, surface, defaults: D, get S() { return S; }, get LEN() { return LEN; }, get P() { return P; }, EDGE };
+  // triangles for the physics engine: the whole road surface including kerbs, and the grass bank outside the banking
+  function collisionMesh() {
+    const n = S.length, E = EDGE(), pos = [], idx = [];
+    for (let k = 0; k <= n; k++) {
+      const m = S[k % n], top = roadY(E, m.b), w = top / SKIRT + 0.5;
+      pos.push(m.x - m.ox * E, roadY(-E, m.b), m.z - m.oz * E,  m.x + m.ox * E, top, m.z + m.oz * E,  m.x + m.ox * (E + w), -0.05, m.z + m.oz * (E + w));
+      if (k < n) { const a = k * 3, b = a + 3; idx.push(a, b, a + 1, a + 1, b, b + 1, a + 1, b + 1, a + 2, a + 2, b + 1, b + 2); }
+    }
+    return { vertices: new Float32Array(pos), indices: new Uint32Array(idx) };
+  }
+  return { build, surface, collisionMesh, defaults: D, get S() { return S; }, get LEN() { return LEN; }, get P() { return P; }, EDGE };
 })();
