@@ -35,7 +35,7 @@
     sun.shadow.mapSize.set(2048, 2048); const sc = sun.shadow.camera; sc.left = sc.bottom = -90; sc.right = sc.top = 90; sc.near = 1; sc.far = 400; sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04;
     scene.add(sun, sun.target);
     // ground (its colour comes from the world, see applyWorld)
-    ground = new THREE.Mesh(new THREE.PlaneGeometry(3000, 3000), new THREE.MeshLambertMaterial()); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+    ground = new THREE.Mesh(new THREE.PlaneGeometry(3000, 3000), new THREE.MeshLambertMaterial()); ground.rotation.x = -Math.PI / 2; ground.position.y = -0.5; ground.receiveShadow = true; scene.add(ground);
     addEventListener('resize', resize); resize();
   }
   // sky, haze, light, ground and road colours for a world (jungle, desert)
@@ -48,7 +48,7 @@
     for (let k = 0; k < 3000; k++) { g.fillStyle = Math.random() < 0.5 ? E.specks[0] : E.specks[1]; g.fillRect(Math.random() * 256, Math.random() * 256, 3, 3); }
     const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(200, 200); t.colorSpace = THREE.SRGBColorSpace;
     if (ground.material.map) ground.material.map.dispose(); ground.material.map = t; ground.material.needsUpdate = true;
-    Track.setLook({ road: E.road, skirt: E.skirt });
+    Track.setLook({ road: E.road, skirt: E.skirt, groundMat: ground.material, tunnel: E.tunnel });
     try { localStorage.setItem('r2_world', w); } catch (e) {}
   }
   function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
@@ -116,7 +116,7 @@
   let lastHud = '';
   function hud(now, inp, dt) {
     const z = car.ground ? car.ground.zone : 'A', Z = Scenery.ZONES[z];
-    const html = '<div class="zLetter">' + z + '</div><div><div class="zName">' + Z.name + ' · corner bank ' + ('ABCD'.indexOf(z) * Track.P.BANK) + '°</div><div class="zNote">' + Z.note + '</div></div>';
+    const html = '<div class="zLetter">' + z + '</div><div><div class="zName">' + 'S' + ('ABCD'.indexOf(z) + 1) + ' · ' + Z.name + '</div><div class="zNote">' + Z.note + '</div></div>';
     if (html !== lastHud) { $('zone').innerHTML = html; lastHud = html; }
     $('speed').textContent = Math.round(Math.hypot(car.vx, car.vz) * 3.6);
     $('laps').innerHTML = 'Lap <b>' + fmt(lap.t0 === null ? null : now - lap.t0) + '</b><br>Last ' + fmt(lap.last) + '<br>Best ' + fmt(lap.best);

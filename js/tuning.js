@@ -17,14 +17,14 @@ const Tuning = (function () {
     ['sceneB', 'Zone B: how much stuff (x)', 0, 3, 0.05, 'Scenery'], ['nearB', 'Zone B: closer (-) or further (+) from the road (m)', -6, 30, 0.5, 'Scenery'], ['sizeB', 'Zone B: size (x)', 0.3, 3, 0.05, 'Scenery'],
     ['sceneC', 'Zone C: how much stuff (x)', 0, 3, 0.05, 'Scenery'], ['nearC', 'Zone C: closer (-) or further (+) from the road (m)', -6, 30, 0.5, 'Scenery'], ['sizeC', 'Zone C: size (x)', 0.3, 3, 0.05, 'Scenery'],
     ['sceneD', 'Zone D: how much stuff (x)', 0, 3, 0.05, 'Scenery'], ['nearD', 'Zone D: closer (-) or further (+) from the road (m)', -6, 30, 0.5, 'Scenery'], ['sizeD', 'Zone D: size (x)', 0.3, 3, 0.05, 'Scenery'],
-    ['BANK', 'Bank added each corner (degrees: A 0, B 1x, C 2x, D 3x)', 0, 15, 1, 'Track'], ['R', 'Corner radius (m)', 25, 120, 1, 'Track'], ['L', 'Straight length (m)', 40, 300, 5, 'Track'], ['W', 'Road width (m)', 8, 24, 0.5, 'Track']
+    ['BANK', 'Sweeper bank (degrees; the carousel gets double)', 0, 20, 1, 'Track'], ['HILLS', 'Hills (x)', 0, 3, 0.1, 'Track'], ['JUMP', 'Jump height (m)', 0, 5, 0.1, 'Track'], ['W', 'Road width (m)', 8, 24, 0.5, 'Track']
   ];
-  const TRACK_KEYS = ['BANK', 'R', 'L', 'W'].concat(...'ABCD'.split('').map(z => ['scene' + z, 'near' + z, 'size' + z]));
+  const TRACK_KEYS = ['BANK', 'HILLS', 'JUMP', 'W'].concat(...'ABCD'.split('').map(z => ['scene' + z, 'near' + z, 'size' + z]));
   let T = {}, el = null, onTrack = null, advOpen = false;
-  function defaults() { const d = Object.assign({}, Car.DEF, { BANK: Track.defaults.BANK, R: Track.defaults.R, L: Track.defaults.L, W: Track.defaults.W }); for (const z of 'ABCD') Object.assign(d, { ['scene' + z]: 1, ['near' + z]: 0, ['size' + z]: 1 }); return d; }
+  function defaults() { const d = Object.assign({}, Car.DEF, { BANK: Track.defaults.BANK, HILLS: Track.defaults.HILLS, JUMP: Track.defaults.JUMP, W: Track.defaults.W }); for (const z of 'ABCD') Object.assign(d, { ['scene' + z]: 1, ['near' + z]: 0, ['size' + z]: 1 }); return d; }
   function load() { T = defaults(); try { Object.assign(T, JSON.parse(localStorage.getItem('r20_tune') || '{}')); } catch (e) {} return T; }
   function save() { try { localStorage.setItem('r20_tune', JSON.stringify(T)); } catch (e) {} }
-  const trackOpts = () => ({ BANK: T.BANK, R: T.R, L: T.L, W: T.W });
+  const trackOpts = () => ({ BANK: T.BANK, HILLS: T.HILLS, JUMP: T.JUMP, W: T.W });
   function changed() { const d = defaults(), o = {}; for (const k in T) if (Math.abs(T[k] - d[k]) > 1e-9) o[k] = T[k]; return o; }
   function render() {
     let html = '<div class="tHead"><b>Tuning</b> <span>Tab to hide</span></div>', grp = '';
@@ -43,7 +43,7 @@ const Tuning = (function () {
       inp.addEventListener('keydown', e => { if (e.code === 'Tab') { e.preventDefault(); toggle(); } });
     });
     el.querySelector('#tCopy').onclick = () => {
-      const txt = 'R2.0 tuning: ' + JSON.stringify(changed()), ta = el.querySelector('#tOut'); ta.value = txt; ta.style.display = 'block'; ta.select();
+      const txt = 'R3.0 tuning: ' + JSON.stringify(changed()), ta = el.querySelector('#tOut'); ta.value = txt; ta.style.display = 'block'; ta.select();
       try { navigator.clipboard.writeText(txt).catch(() => {}); } catch (e) {}
     };
     el.querySelector('#tReset').onclick = () => { T = Object.assign(T, defaults()); save(); render(); if (onTrack) onTrack(trackOpts()); };
