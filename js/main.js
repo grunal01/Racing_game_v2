@@ -68,7 +68,7 @@
   // ---- camera ----
   const cam = { yaw: 0, pos: new THREE.Vector3(), look: new THREE.Vector3(), init: false };
   function updateCamera(dt, x, y, z, yaw) {
-    // follow the direction of travel more than the nose, so a drift swings the car under the camera instead of dragging the view
+    // follow the direction of travel more than the nose, so a slide swings the car under the camera instead of dragging the view
     const sp = Math.hypot(car.vx, car.vz), travel = sp > 4 ? Math.atan2(car.vx, car.vz) : yaw;
     let target = sp > 4 ? travel + angDiff(yaw, travel) * 0.35 : yaw;
     if (car.speed < -1) target = yaw;
@@ -112,14 +112,9 @@
     if (html !== lastHud) { $('zone').innerHTML = html; lastHud = html; }
     $('speed').textContent = Math.round(Math.hypot(car.vx, car.vz) * 3.6);
     $('laps').innerHTML = 'Lap <b>' + fmt(lap.t0 === null ? null : now - lap.t0) + '</b><br>Last ' + fmt(lap.last) + '<br>Best ' + fmt(lap.best);
-    const d = $('drift'); d.style.opacity = car.drifting ? 1 : 0;
-    const lvl = car.drifting ? (car.driftT >= T.boostAt * 2 ? 2 : car.driftT >= T.boostAt ? 1 : 0) : 0;
-    d.style.opacity = car.drifting || car.boostT > 0 ? 1 : 0;
-    if (car.drifting) { d.textContent = 'DRIFT ' + car.driftT.toFixed(1) + ' s' + (lvl === 2 ? ' · BIG TURBO READY' : lvl === 1 ? ' · TURBO READY' : ''); d.className = lvl ? 'ready' : ''; }
-    else if (car.boostT > 0) { d.textContent = car.boostLvl === 2 ? 'BIG TURBO!' : 'TURBO!'; d.className = 'ready'; }
     // live readout so it's easy to say what the car was doing when it felt wrong
-    const slideDeg = Math.round(Math.abs(car.slipR) * 57.3), lim = !car.drifting && slideDeg > 4;
-    $('tele').innerHTML = '<b class="' + (car.drifting ? 'm-drift' : lim ? 'm-wide' : 'm-grip') + '">' + (car.air ? 'AIR' : car.drifting ? 'DRIFT' : lim ? 'SLIDING WIDE' : 'GRIP') + '</b> · slide ' + slideDeg + '° · bank ' + Math.round((car.ground ? car.ground.b : 0) * 57.3) + '° · ' + (car.ground && car.ground.onRoad ? 'road' : 'grass');
+    const slideDeg = Math.round(Math.abs(car.slipR) * 57.3), lim = slideDeg > 4;
+    $('tele').innerHTML = '<b class="' + (lim ? 'm-wide' : 'm-grip') + '">' + (car.air ? 'AIR' : lim ? 'SLIDING' : 'GRIP') + '</b> · slide ' + slideDeg + '° · bank ' + Math.round((car.ground ? car.ground.b : 0) * 57.3) + '° · ' + (car.ground && car.ground.onRoad ? 'road' : 'grass');
     if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').style.opacity = 0; }
   }
   function fillCarSelect() { $('carSel').innerHTML = carNames.map((n, i) => '<option value="' + i + '"' + (i === carIdx ? ' selected' : '') + '>' + n + '</option>').join(''); }

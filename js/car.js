@@ -2,7 +2,7 @@
 // Rapier (the physics engine) only does the springs: each wheel is a suspension ray, so bumps, banking and landings feel real.
 // Everything on the road plane is an arcade rule, Mario Kart style: the engine pushes the whole kart forward (no rear-wheel drive),
 // steering turns where the kart points, and its direction of travel catches up with its nose at the grip rate. Low grip = it slides
-// through bends, but steering always works in a slide, so you can hold your line. Tap the brake while turning for a bigger slide.
+// through bends, but steering always works in a slide, so you can hold your line. No drift button or brake drift.
 // S brakes; once stopped it reverses.
 const Car = (function () {
   // every number here can be changed live in the tuning panel (Tab)
@@ -10,8 +10,6 @@ const Car = (function () {
     topSpeed: 50, accel: 15, brake: 26, reverse: 8,
     turnRate: 1.8, turnFall: 100, steerSpeed: 5,
     grip: 3.2, slideMax: 40, slideHold: 0.35, slideScrub: 0.12, offGrip: 0.6, offTop: 0.62,
-    driftEase: 0.5, driftMinSpeed: 12, driftAngle: 30, driftTight: 30, driftWide: 110, driftBrake: 0, straighten: 0.35,
-    boostAt: 0.9, boostPower: 5, boostTime: 0.7,
     suspStiff: 60, suspDamp: 4, suspTravel: 0.3, gravity: 20, comY: -0.4,
     camDist: 9.5, camHeight: 3.6, camLag: 7, camLook: 6, fov: 62, fovBoost: 14
   };
@@ -88,7 +86,7 @@ const Car = (function () {
     const g = Track.surface(x, z, -1), q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
     c.rb.setTranslation({ x, y: g.y + 0.5, z }, true); c.rb.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }, true);
     c.rb.setLinvel({ x: 0, y: 0, z: 0 }, true); c.rb.setAngvel({ x: 0, y: 0, z: 0 }, true);
-    Object.assign(c, { hint: g.i, ground: g, drifting: false, driftT: 0, steer: 0, speed: 0, vx: 0, vz: 0, prevBrake: false, airT: 0, outT: 0, straightT: 0, boostT: 0, boostLvl: 0 });
+    Object.assign(c, { hint: g.i, ground: g, drifting: false, driftT: 0, steer: 0, speed: 0, vx: 0, vz: 0, prevBrake: false, airT: 0, });
     readState(c); c.prev.p.copy(c.cur.p); c.prev.q.copy(c.cur.q);
   }
   // give a velocity along the heading (used by tests and resets)
@@ -113,8 +111,7 @@ const Car = (function () {
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(tq), f3 = new THREE.Vector3(0, 0, 1).applyQuaternion(tq);
     const fl = Math.hypot(f3.x, f3.z) || 1, fx = f3.x / fl, fz = f3.z / fl;   // flat forward direction
     const g = Track.surface(c.x, c.z, c.hint); c.hint = g.i; c.ground = g;
-    if (c.boostT > 0) { c.boostT -= dt; if (c.boostT <= 0) c.boostLvl = 0; }
-    const off = !g.onRoad, top = T.topSpeed * (off ? T.offTop : 1) * (1 + 0.012 * T.boostPower * c.boostLvl);
+    const off = !g.onRoad, top = T.topSpeed * (off ? T.offTop : 1);
     let contacts = 0; for (let i = 0; i < c.wheels.length; i++) if (v.wheelIsInContact(i)) contacts++;
     c.air = contacts === 0; c.airT = c.air ? (c.airT || 0) + dt : 0;
     const grounded = contacts >= 1;
@@ -131,66 +128,35 @@ const Car = (function () {
     const heading = Math.atan2(fx, fz), travel0 = sp > 0.5 ? Math.atan2(lv.x, lv.z) : heading;
     const slide = u > 0.5 ? angDiff(travel0, heading) : 0;
 
-    // ---- drift: tap the brake while steering at speed ----
-    // Press the brake while turning at speed to start; keep holding it to keep drifting (it hardly slows you); let go to finish.
-    // In a drift the kart holds a steady angle and your steering bends its PATH: into the turn = tighter, no steering = medium,
-    // the other way = wider. When you let go, the nose swings back to where you're already going (no flick off the road).
-    // Drift long enough and you get a mini-turbo on the way out.
-    const tapped = inp.brake && !c.prevBrake; c.prevBrake = inp.brake;
-    if (!c.drifting && grounded && u > T.driftMinSpeed && Math.abs(inp.steer) >= T.driftEase && tapped) { c.drifting = true; c.driftDir = Math.sign(inp.steer); c.driftT = 0; c.outT = 0; }
-    if (c.drifting) {
-      c.driftT += dt; const into = c.steer * c.driftDir;
-      c.endWhy = !inp.brake ? 'let go' : u < T.driftMinSpeed * 0.6 ? 'slow' : 'air';
-      if (!inp.brake || u < T.driftMinSpeed * 0.6 || c.airT > 0.3) {
-        c.drifting = false; c.straightT = T.straighten;
-        const lvl = c.driftT >= T.boostAt * 2 ? 2 : c.driftT >= T.boostAt ? 1 : 0;
-        if (lvl && c.airT <= 0.3) { c.boostLvl = lvl; c.boostT = T.boostTime * lvl; }
-      }
-    }
-
     // ---- rotation: steering turns where the kart points ----
     const au = Math.abs(u);
-    let yawT = -c.steer * T.turnRate * Math.min(1, au / 6) / (1 + au / T.turnFall) * (u < -0.5 ? -1 : 1), pathRate = 0;
-    if (c.drifting) {
-      const into = Math.max(-1, Math.min(1, c.steer * c.driftDir)), k = (into + 1) / 2;   // 0 widest .. 1 tightest
-      const radius = T.driftWide + (T.driftTight - T.driftWide) * k;
-      pathRate = -c.driftDir * Math.max(0, sp) / radius;
-      const ang = T.driftAngle * Math.PI / 180 * Math.min(1, c.driftT / 0.25);
-      yawT = pathRate + angDiff(travel0 - c.driftDir * ang, heading) * 8;
-    } else if (c.straightT > 0) {
-      c.straightT -= dt;
-      yawT = yawT * 0.3 + angDiff(travel0, heading) * 9;   // nose swings back in line with where you're going
-    }
+    let yawT = -c.steer * T.turnRate * Math.min(1, au / 6) / (1 + au / T.turnFall) * (u < -0.5 ? -1 : 1);
     const w = rb.angvel(), yawNow = w.x * up.x + w.y * up.y + w.z * up.z;
     const steerAuthority = grounded ? 1 : 0.15;   // a little control in the air
     const dy = (yawT - yawNow) * Math.min(1, 14 * dt) * steerAuthority;
     // also calm any roll or pitch wobble a little, so the kart sits flat on its springs
     rb.setAngvel({ x: (w.x + up.x * dy) * (1 - 2 * dt), y: w.y + up.y * dy, z: (w.z + up.z * dy) * (1 - 2 * dt) }, true);
 
-    // brief hops (a bank ramp at speed) still count as on the ground, so a drift doesn't fly straight off mid-corner
+    // brief hops (a bank ramp at speed) still count as on the ground, so the kart doesn't fly straight off mid-corner
     if (grounded || c.airT < 0.25) {
       // ---- speed: the engine pushes the whole kart forward; brakes; drag ----
-      let acc = 0; const vf = c.drifting ? sp : u;   // in a drift the engine and drag act along the path, so the kart keeps its speed
-      if (inp.throttle || c.drifting) acc += T.accel * 1.25 * Math.max(0, 1 - (Math.max(0, vf) / top) ** 3);
-      if (inp.brake) acc += u > 1 ? -T.brake * (c.drifting ? T.driftBrake : 1) : -T.reverse * Math.max(0, 1 - Math.max(0, -u) / 14);
+      let acc = 0; const vf = u;
+      if (inp.throttle) acc += T.accel * 1.25 * Math.max(0, 1 - (Math.max(0, vf) / top) ** 3);
+      if (inp.brake) acc += u > 1 ? -T.brake : -T.reverse * Math.max(0, 1 - Math.max(0, -u) / 14);
       if (!inp.throttle && !inp.brake) acc -= 0.3 * u;
       acc -= 0.0012 * vf * Math.abs(vf) * (off ? 4 : 1);
       let uu = u + acc * dt;
       // ---- sliding: the direction of travel catches up with the nose at the grip rate ----
       const back = uu < 0, hd = back ? heading + Math.PI : heading;
       let tr = sp > 0.5 ? Math.atan2(lv.x, lv.z) : hd, d = angDiff(hd, tr);
-      if (c.drifting) {
-        tr += pathRate * dt; d = 0;   // the path bends at the drift rate; grip doesn't pull it toward the nose
-      } else {
+      {
         const maxS = T.slideMax * Math.PI / 180;
         if (Math.abs(d) > maxS) { tr = hd - Math.sign(d) * maxS; d = Math.sign(d) * maxS; }
         // the further sideways, the weaker the grip, so a big slide carries further before it hooks up again
         const hold = 1 - T.slideHold * Math.min(1, Math.abs(d) / maxS);
-        // straightening after a drift: the nose comes to the path, the path doesn't jump to the nose
-        const follow = (c.straightT > 0 ? 0.3 : 1) * T.grip * hold * (off ? T.offGrip : 1);
+        const follow = T.grip * hold * (off ? T.offGrip : 1);
         tr += d * Math.min(1, follow * dt);
       }
-      if (c.boostT > 0 && !back) acc += T.boostPower;
       // keep the full speed through a slide (not just the forward part), minus a little scrub
       const mag = back ? Math.abs(uu) : Math.max(0, sp + acc * dt);
       const speed = mag * (1 - T.slideScrub * Math.abs(Math.sin(d)) * 2 * dt);
