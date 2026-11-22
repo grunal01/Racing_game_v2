@@ -28,5 +28,5 @@ const Assets = (function () {
     const box = new THREE.Box3().setFromObject(root); out.h = box.max.y - box.min.y; out.w = Math.max(box.max.x - box.min.x, box.max.z - box.min.z);
     return (partsCache[name] = out);
   }
-  return { load, car: n => cars[n], carNames: () => Object.keys(cars).sort(), parts, has: n => !!nature[n] };
+  return { load, car: n => cars[n], carNames: () => Object.keys(cars).sort(), natureNames: () => Object.keys(nature).sort(), parts, has: n => !!nature[n] };
 })();
