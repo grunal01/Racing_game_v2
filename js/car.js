@@ -1,4 +1,4 @@
-// ===== Car: a Kenney model as an arcade kart, on Rapier suspension =====
+// ===== Car: a Kenney model as an arcade kart (R1.8), on Rapier suspension =====
 // Rapier (the physics engine) only does the springs: each wheel is a suspension ray, so bumps, banking and landings feel real.
 // Everything on the road plane is an arcade rule, Mario Kart style: the engine pushes the whole kart forward (no rear-wheel drive),
 // steering turns where the kart points, and its direction of travel catches up with its nose at the grip rate. Low grip = it slides
@@ -9,8 +9,8 @@ const Car = (function () {
   const DEF = {
     topSpeed: 50, accel: 15, brake: 26, reverse: 8,
     turnRate: 1.8, turnFall: 100, steerSpeed: 5,
-    grip: 3.2, slideMax: 35, slideScrub: 0.12, offGrip: 0.6, offTop: 0.62,
-    driftEase: 0.5, driftMinSpeed: 12, driftKick: 0.2, driftTurn: 1.4, driftGrip: 1.4, driftBrake: 0.3,
+    grip: 3.2, slideMax: 40, slideHold: 0.35, slideScrub: 0.12, offGrip: 0.6, offTop: 0.62,
+    driftEase: 0.5, driftMinSpeed: 12, driftKick: 0.2, driftTurn: 1.4, driftGrip: 1.4, driftBrake: 0.3, regrip: 0.8,
     suspStiff: 60, suspDamp: 4, suspTravel: 0.3, gravity: 20, comY: -0.4,
     camDist: 9.5, camHeight: 3.6, camLag: 7, camLook: 6, fov: 62, fovBoost: 14
   };
@@ -87,7 +87,7 @@ const Car = (function () {
     const g = Track.surface(x, z, -1), q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
     c.rb.setTranslation({ x, y: g.y + 0.5, z }, true); c.rb.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }, true);
     c.rb.setLinvel({ x: 0, y: 0, z: 0 }, true); c.rb.setAngvel({ x: 0, y: 0, z: 0 }, true);
-    Object.assign(c, { hint: g.i, ground: g, drifting: false, driftT: 0, steer: 0, speed: 0, vx: 0, vz: 0, kick: 0, prevBrake: false, airT: 0 });
+    Object.assign(c, { hint: g.i, ground: g, drifting: false, driftT: 0, steer: 0, speed: 0, vx: 0, vz: 0, kick: 0, prevBrake: false, airT: 0, regripT: 0 });
     readState(c); c.prev.p.copy(c.cur.p); c.prev.q.copy(c.cur.q);
   }
   // give a velocity along the heading (used by tests and resets)
@@ -134,7 +134,7 @@ const Car = (function () {
     if (!c.drifting && grounded && u > T.driftMinSpeed && Math.abs(inp.steer) >= T.driftEase && tapped) { c.drifting = true; c.driftDir = Math.sign(inp.steer); c.driftT = 0; c.kick = T.driftKick; }
     if (c.drifting) {
       c.driftT += dt; const into = c.steer * c.driftDir;
-      if ((into < 0.2 && Math.abs(slide) < 0.1 && c.driftT > 0.25) || u < T.driftMinSpeed * 0.6 || c.airT > 0.25) c.drifting = false;
+      if ((into < 0.2 && Math.abs(slide) < 0.1 && c.driftT > 0.25) || u < T.driftMinSpeed * 0.6 || c.airT > 0.25) { c.drifting = false; c.regripT = T.regrip; }
     }
 
     // ---- rotation: steering turns where the kart points ----
@@ -162,7 +162,12 @@ const Car = (function () {
       const maxS = (c.drifting ? Math.max(T.slideMax, 45) : T.slideMax) * Math.PI / 180;
       if (Math.abs(d) > maxS) { tr = hd - Math.sign(d) * maxS; d = Math.sign(d) * maxS; }
       const into = c.drifting ? c.steer * c.driftDir : 0;
-      const follow = (c.drifting ? T.driftGrip * (1 + 2 * Math.max(0, -into)) : T.grip) * (off ? T.offGrip : 1);
+      let base = T.grip;
+      // just out of a brake slide: grip comes back over a moment instead of snapping on
+      if (c.regripT > 0) { c.regripT = Math.max(0, c.regripT - dt); const k = T.regrip > 0 ? c.regripT / T.regrip : 0; base = T.grip + (T.driftGrip - T.grip) * k * k; }
+      // the further sideways, the weaker the grip, so a big slide carries further before it hooks up again
+      const hold = 1 - T.slideHold * Math.min(1, Math.abs(d) / maxS);
+      const follow = (c.drifting ? T.driftGrip * (1 + 2 * Math.max(0, -into)) : base * hold) * (off ? T.offGrip : 1);
       tr += d * Math.min(1, follow * dt);
       // keep the full speed through a slide (not just the forward part), minus a little scrub
       const mag = back ? Math.abs(uu) : Math.max(0, sp + acc * dt);

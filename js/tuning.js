@@ -7,7 +7,7 @@ const Tuning = (function () {
     ['turnRate', 'Steering', 0.5, 4, 0.05, 'Steering'], ['turnFall', 'Steering kept at speed (higher = sharper at speed)', 15, 300, 5, 'Steering'],
     ['steerSpeed', 'Steering response', 1, 15, 0.25, 'Steering'],
     ['grip', 'Grip (lower = slides more)', 0.5, 20, 0.1, 'Sliding'], ['slideMax', 'Most sideways a normal slide gets (degrees)', 5, 70, 1, 'Sliding'],
-    ['slideScrub', 'Speed lost while sliding', 0, 1, 0.02, 'Sliding'], ['offGrip', 'Grass grip (x)', 0.2, 1, 0.02, 'Sliding'], ['offTop', 'Grass top speed (x)', 0.2, 1, 0.02, 'Sliding'],
+    ['slideHold', 'Big slides carry further (grip fades the more sideways you are)', 0, 0.9, 0.05, 'Sliding'], ['regrip', 'Time for grip to come back after a brake slide (s)', 0, 2, 0.05, 'Brake slide'], ['slideScrub', 'Speed lost while sliding', 0, 1, 0.02, 'Sliding'], ['offGrip', 'Grass grip (x)', 0.2, 1, 0.02, 'Sliding'], ['offTop', 'Grass top speed (x)', 0.2, 1, 0.02, 'Sliding'],
     ['driftEase', 'Steering needed for a brake slide', 0.1, 1, 0.05, 'Brake slide'], ['driftMinSpeed', 'Slowest speed for a brake slide (m/s)', 5, 40, 1, 'Brake slide'],
     ['driftKick', 'Kick when a brake slide starts', 0, 1.5, 0.05, 'Brake slide'], ['driftTurn', 'Steering in a brake slide', 0.5, 4, 0.05, 'Brake slide'],
     ['driftGrip', 'Grip in a brake slide (lower = more sideways)', 0.2, 8, 0.1, 'Brake slide'], ['driftBrake', 'Brake strength while sliding (x)', 0, 1, 0.05, 'Brake slide'],
@@ -16,13 +16,13 @@ const Tuning = (function () {
     ['comY', 'Weight height (lower = harder to roll)', -1, 1, 0.05, 'Suspension'],
     ['camDist', 'Camera distance', 4, 20, 0.25, 'Camera'], ['camHeight', 'Camera height', 1, 10, 0.1, 'Camera'], ['camLag', 'Camera follow speed', 1, 20, 0.5, 'Camera'],
     ['camLook', 'Look ahead', 0, 20, 0.5, 'Camera'], ['fov', 'Field of view', 40, 90, 1, 'Camera'], ['fovBoost', 'Extra view at speed', 0, 30, 1, 'Camera'],
-    ['BANK', 'Bank angle (degrees)', 0, 40, 1, 'Track'], ['R', 'Bend radius (m)', 25, 120, 1, 'Track'], ['L', 'Straight length (m)', 60, 400, 5, 'Track'], ['W', 'Road width (m)', 8, 24, 0.5, 'Track']
+    ['BANK', 'Bank added each corner (degrees: A 0, B 1x, C 2x, D 3x)', 0, 15, 1, 'Track'], ['R', 'Corner radius (m)', 25, 120, 1, 'Track'], ['L', 'Straight length (m)', 40, 300, 5, 'Track'], ['W', 'Road width (m)', 8, 24, 0.5, 'Track']
   ];
   const TRACK_KEYS = ['BANK', 'R', 'L', 'W'];
   let T = {}, el = null, onTrack = null;
   function defaults() { return Object.assign({}, Car.DEF, { BANK: Track.defaults.BANK, R: Track.defaults.R, L: Track.defaults.L, W: Track.defaults.W }); }
-  function load() { T = defaults(); try { Object.assign(T, JSON.parse(localStorage.getItem('r17_tune') || '{}')); } catch (e) {} return T; }
-  function save() { try { localStorage.setItem('r17_tune', JSON.stringify(T)); } catch (e) {} }
+  function load() { T = defaults(); try { Object.assign(T, JSON.parse(localStorage.getItem('r18_tune') || '{}')); } catch (e) {} return T; }
+  function save() { try { localStorage.setItem('r18_tune', JSON.stringify(T)); } catch (e) {} }
   const trackOpts = () => ({ BANK: T.BANK, R: T.R, L: T.L, W: T.W });
   function changed() { const d = defaults(), o = {}; for (const k in T) if (Math.abs(T[k] - d[k]) > 1e-9) o[k] = T[k]; return o; }
   function render() {
@@ -40,7 +40,7 @@ const Tuning = (function () {
       inp.addEventListener('keydown', e => { if (e.code === 'Tab') { e.preventDefault(); toggle(); } });
     });
     el.querySelector('#tCopy').onclick = () => {
-      const txt = 'R1.7 tuning: ' + JSON.stringify(changed()), ta = el.querySelector('#tOut'); ta.value = txt; ta.style.display = 'block'; ta.select();
+      const txt = 'R1.8 tuning: ' + JSON.stringify(changed()), ta = el.querySelector('#tOut'); ta.value = txt; ta.style.display = 'block'; ta.select();
       try { navigator.clipboard.writeText(txt).catch(() => {}); } catch (e) {}
     };
     el.querySelector('#tReset').onclick = () => { T = Object.assign(T, defaults()); save(); render(); if (onTrack) onTrack(trackOpts()); };
