@@ -2,15 +2,18 @@
 const Tuning = (function () {
   // [key, label, min, max, step, group]
   const SPEC = [
-    ['topSpeed', 'Top speed (m/s)', 20, 90, 1, 'Driving'], ['accel', 'Acceleration', 5, 40, 0.5, 'Driving'], ['brake', 'Brakes', 10, 70, 1, 'Driving'],
-    ['reverse', 'Reverse', 2, 20, 0.5, 'Driving'], ['turnRate', 'Steering', 0.6, 4, 0.05, 'Driving'], ['turnFall', 'Steering kept at speed (higher = sharper)', 20, 300, 5, 'Driving'],
+    ['topSpeed', 'Top speed (m/s)', 20, 90, 1, 'Driving'], ['accel', 'Acceleration', 4, 40, 0.5, 'Driving'], ['brake', 'Brakes', 5, 70, 1, 'Driving'],
+    ['reverse', 'Reverse', 2, 20, 0.5, 'Driving'], ['steerLock', 'Steering lock', 0.15, 1, 0.01, 'Driving'], ['steerFall', 'Steering kept at speed (higher = sharper)', 8, 150, 1, 'Driving'],
     ['steerSpeed', 'Steering response', 1, 15, 0.25, 'Driving'],
-    ['grip', 'Normal grip (how fast the car follows its nose)', 2, 30, 0.5, 'Grip'], ['cornerLimit', 'Cornering limit before it slides wide', 10, 80, 1, 'Grip'],
-    ['bankGrip', 'Extra cornering on banks', 0, 4, 0.1, 'Grip'], ['offTop', 'Grass top speed (x)', 0.2, 1, 0.02, 'Grip'], ['offGrip', 'Grass grip (x)', 0.2, 1, 0.02, 'Grip'],
-    ['driftEase', 'Steering needed to start a drift (lower = easier)', 0.1, 1, 0.05, 'Drift'], ['driftMinSpeed', 'Slowest speed you can drift (m/s)', 5, 40, 1, 'Drift'],
+    ['tyreGrip', 'Tyre grip', 0.5, 8, 0.1, 'Grip'], ['sideGrip', 'Side grip (cornering)', 0.2, 4, 0.05, 'Grip'], ['rearGrip', 'Rear grip (x, lower = looser rear)', 0.4, 1.5, 0.02, 'Grip'],
+    ['downforce', 'Downforce at speed', 0, 3, 0.05, 'Grip'], ['offGrip', 'Grass grip (x)', 0.2, 1, 0.02, 'Grip'], ['offTop', 'Grass top speed (x)', 0.2, 1, 0.02, 'Grip'],
+    ['suspStiff', 'Suspension stiffness', 10, 150, 1, 'Suspension'], ['suspDamp', 'Suspension damping', 0.5, 10, 0.1, 'Suspension'], ['suspTravel', 'Suspension travel (m)', 0.05, 0.6, 0.01, 'Suspension'],
+    ['gravity', 'Gravity (higher = more planted)', 9, 40, 0.5, 'Suspension'], ['upright', 'Keep-upright assist', 0, 20, 0.5, 'Suspension'], ['yawDamp', 'Straight-line stability', 0, 3, 0.05, 'Suspension'], ['comY', 'Weight height (lower = harder to roll)', -1, 1, 0.05, 'Suspension'],
+    ['driftEase', 'Steering needed to start a drift', 0.2, 1, 0.05, 'Drift'], ['driftMinSpeed', 'Slowest speed you can drift (m/s)', 5, 40, 1, 'Drift'],
     ['driftKick', 'Kick when a drift starts', 0, 2, 0.05, 'Drift'], ['driftTurn', 'Steering in a drift', 0.5, 4, 0.05, 'Drift'],
     ['driftGrip', 'Drift grip (lower = more sideways)', 0.2, 8, 0.1, 'Drift'], ['driftMax', 'Most sideways a drift can get (degrees)', 10, 80, 1, 'Drift'],
     ['driftScrub', 'Speed lost while drifting', 0, 1, 0.02, 'Drift'], ['driftBrake', 'Brake strength while drifting (x)', 0, 1, 0.05, 'Drift'],
+    ['driftRearGrip', 'Tyre side grip left in a drift (x)', 0, 1, 0.01, 'Drift'], ['driftHoldBank', 'Stops a drift sliding down the banking', 0, 1, 0.05, 'Drift'], ['driftRecover', 'Grip comes back over (s)', 0.05, 1.5, 0.05, 'Drift'],
     ['camDist', 'Camera distance', 4, 20, 0.25, 'Camera'], ['camHeight', 'Camera height', 1, 10, 0.1, 'Camera'], ['camLag', 'Camera follow speed', 1, 20, 0.5, 'Camera'],
     ['camLook', 'Look ahead', 0, 20, 0.5, 'Camera'], ['fov', 'Field of view', 40, 90, 1, 'Camera'], ['fovBoost', 'Extra view at speed', 0, 30, 1, 'Camera'],
     ['BANK', 'Bank angle (degrees)', 0, 40, 1, 'Track'], ['R', 'Bend radius (m)', 25, 120, 1, 'Track'], ['L', 'Straight length (m)', 60, 400, 5, 'Track'], ['W', 'Road width (m)', 8, 24, 0.5, 'Track']
@@ -18,8 +21,8 @@ const Tuning = (function () {
   const TRACK_KEYS = ['BANK', 'R', 'L', 'W'];
   let T = {}, el = null, onTrack = null;
   function defaults() { return Object.assign({}, Car.DEF, { BANK: Track.defaults.BANK, R: Track.defaults.R, L: Track.defaults.L, W: Track.defaults.W }); }
-  function load() { T = defaults(); try { Object.assign(T, JSON.parse(localStorage.getItem('r14_tune') || '{}')); } catch (e) {} return T; }
-  function save() { try { localStorage.setItem('r14_tune', JSON.stringify(T)); } catch (e) {} }
+  function load() { T = defaults(); try { Object.assign(T, JSON.parse(localStorage.getItem('r15_tune') || '{}')); } catch (e) {} return T; }
+  function save() { try { localStorage.setItem('r15_tune', JSON.stringify(T)); } catch (e) {} }
   const trackOpts = () => ({ BANK: T.BANK, R: T.R, L: T.L, W: T.W });
   function changed() { const d = defaults(), o = {}; for (const k in T) if (Math.abs(T[k] - d[k]) > 1e-9) o[k] = T[k]; return o; }
   function render() {
@@ -37,7 +40,7 @@ const Tuning = (function () {
       inp.addEventListener('keydown', e => { if (e.code === 'Tab') { e.preventDefault(); toggle(); } });
     });
     el.querySelector('#tCopy').onclick = () => {
-      const txt = 'R1.4 tuning: ' + JSON.stringify(changed()), ta = el.querySelector('#tOut'); ta.value = txt; ta.style.display = 'block'; ta.select();
+      const txt = 'R1.5 tuning: ' + JSON.stringify(changed()), ta = el.querySelector('#tOut'); ta.value = txt; ta.style.display = 'block'; ta.select();
       try { navigator.clipboard.writeText(txt).catch(() => {}); } catch (e) {}
     };
     el.querySelector('#tReset').onclick = () => { T = Object.assign(T, defaults()); save(); render(); if (onTrack) onTrack(trackOpts()); };

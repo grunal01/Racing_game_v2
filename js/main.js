@@ -44,7 +44,7 @@
   }
   function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
 
-  function buildTrack(opts) { Track.build(scene, opts); Scenery.build(scene); if (car) resetToRoad(true); }
+  function buildTrack(opts) { Track.build(scene, opts); Phys.setTrack(); Scenery.build(scene); if (car) resetToRoad(true); }
   function resetToRoad(toStart) {
     const S = Track.S, i = toStart ? 6 : (car.ground ? car.ground.i : 6), m = S[i];
     Car.place(car, m.x, m.z, Math.atan2(m.hx, m.hz)); lap.cur = 0; lap.armed = false; if (toStart) lap.t0 = null;
@@ -94,13 +94,12 @@
     const dt = Math.min(0.1, (now - last) / 1000 || 0); last = now; acc += dt;
     T = Tuning.T;
     const inp = { throttle: down('KeyW', 'ArrowUp'), brake: down('KeyS', 'ArrowDown'), steer: (down('KeyD', 'ArrowRight') ? 1 : 0) - (down('KeyA', 'ArrowLeft') ? 1 : 0) };
-    let n = 0; const prev = { x: car.x, y: car.y, z: car.z, yaw: car.yaw };
-    while (acc >= STEP && n < 12) { prev.x = car.x; prev.y = car.y; prev.z = car.z; prev.yaw = car.yaw; Car.step(car, T, inp, STEP); acc -= STEP; n++; }
+    let n = 0;
+    while (acc >= STEP && n < 12) { Car.savePrev(car); Car.step(car, T, inp, STEP); acc -= STEP; n++; }
     if (n >= 12) acc = 0;
-    const a = acc / STEP, ix = prev.x + (car.x - prev.x) * a, iy = prev.y + (car.y - prev.y) * a, iz = prev.z + (car.z - prev.z) * a, iyaw = prev.yaw + angDiff(car.yaw, prev.yaw) * a;
-    const sx = car.x, sy = car.y, sz = car.z, syaw = car.yaw; car.x = ix; car.y = iy; car.z = iz; car.yaw = iyaw;
-    Car.draw(car, dt); updateCamera(dt, ix, iy, iz, iyaw);
-    car.x = sx; car.y = sy; car.z = sz; car.yaw = syaw;
+    Car.draw(car, dt, acc / STEP);
+    const ix = car.ix, iy = car.iy, iz = car.iz, iyaw = car.iyaw;
+    updateCamera(dt, ix, iy, iz, iyaw);
     sun.position.set(ix + 60, 110, iz + 35); sun.target.position.set(ix, 0, iz);
     updateLap(now); hud(now, inp, dt);
     Sfx.update({ speed: car.speed, top: T.topSpeed, throttle: inp.throttle, slip: car.slip, onRoad: car.ground && car.ground.onRoad, boost: false });
@@ -124,9 +123,10 @@
 
   async function boot() {
     setupScene();
+    await Phys.init(Car.DEF.gravity);
     await Assets.load(p => { $('loadBar').style.width = Math.round(p * 100) + '%'; });
     T = Tuning.init(opts => buildTrack(opts));
-    Track.build(scene, Tuning.trackOpts()); Scenery.build(scene);
+    Track.build(scene, Tuning.trackOpts()); Phys.setTrack(); Scenery.build(scene);
     carNames = Assets.carNames(); let saved = null; try { saved = localStorage.getItem('r1_car'); } catch (e) {}
     carIdx = Math.max(0, carNames.indexOf(saved || 'race'));
     car = Car.create(scene, carNames[carIdx]); resetToRoad(true);
@@ -134,7 +134,7 @@
     $('loading').style.display = 'none'; $('start').style.display = 'flex';
     $('go').onclick = () => { $('start').style.display = 'none'; running = true; Sfx.start(); lap.t0 = performance.now(); $('view').focus(); };
     last = performance.now(); requestAnimationFrame(frame);
-    window.__game = { car, Track, Scenery, keys };
+    window.__game = { car, Track, Scenery, keys, Phys };
   }
   boot().catch(e => { $('loading').textContent = 'Could not load: ' + e.message; console.error(e); });
 })();
