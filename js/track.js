@@ -5,7 +5,7 @@
 const Track = (function () {
   const D = { L: 120, R: 65, W: 14, KERB: 1.4, BANK: 10, RAMP: 70 };   // straight length, corner radius, road width, kerb width (m), extra bank per corner (degrees), bank ramp length (m)
   const BASE = 0.06, SKIRT = 0.38;                                      // road sits a hair above the ground; banking falls away outside at this slope
-  let P = Object.assign({}, D), S = [], LEN = 0, group = null;
+  let P = Object.assign({}, D), S = [], LEN = 0, group = null, look = { road: '#5a5650', skirt: 0x4f7a34 };
   const sstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
   // sections in driving order: each zone is one straight then the corner after it. zone letters label the jungle designs
@@ -70,7 +70,7 @@ const Track = (function () {
   function canvasTex(w, h, draw) { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; }
   function roadTex() {
     return canvasTex(512, 256, (g, w, h) => {
-      g.fillStyle = '#5a5650'; g.fillRect(0, 0, w, h);
+      g.fillStyle = look.road; g.fillRect(0, 0, w, h);
       for (let k = 0; k < 6000; k++) { const v = 70 + Math.random() * 40; g.fillStyle = `rgba(${v},${v - 3},${v - 8},0.5)`; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); }
       g.fillStyle = 'rgba(0,0,0,0.12)'; for (const v of [0.3, 0.7]) g.fillRect(0, h * v - 18, w, 36);   // worn racing lines
       g.fillStyle = '#f2efe6'; g.fillRect(0, h * 0.035, w, 6); g.fillRect(0, h * 0.965 - 6, w, 6);       // edge lines
@@ -123,7 +123,7 @@ const Track = (function () {
     const red = new THREE.Color(0xd62828), wht = new THREE.Color(0xf5f5f5), kerbMat = new THREE.MeshLambertMaterial({ vertexColors: true });
     const stripe = k => (Math.floor(k / 4) % 2 ? red : wht);
     group.add(strip(-EDGE(), -P.W / 2, kerbMat, stripe), strip(P.W / 2, EDGE(), kerbMat, stripe));
-    group.add(skirt(new THREE.MeshLambertMaterial({ color: 0x4f7a34 })));
+    group.add(skirt(new THREE.MeshLambertMaterial({ color: look.skirt })));
     group.add(startLine());
     scene.add(group);
     return { S, LEN, P };
@@ -138,5 +138,5 @@ const Track = (function () {
     }
     return { vertices: new Float32Array(pos), indices: new Uint32Array(idx) };
   }
-  return { build, surface, collisionMesh, defaults: D, get S() { return S; }, get LEN() { return LEN; }, get P() { return P; }, EDGE };
+  return { setLook: l => { look = l; }, build, surface, collisionMesh, defaults: D, get S() { return S; }, get LEN() { return LEN; }, get P() { return P; }, EDGE };
 })();

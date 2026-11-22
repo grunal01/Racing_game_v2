@@ -11,7 +11,7 @@ A fresh start after v17. The old game (v15 to v17) stays as an archive in `gruna
 | `js/track.js` | The loop: samples along the centre line, banking, road meshes, and `surface(x, z)` (the ground under any point) |
 | `js/car.js` | The car on Rapier's raycast vehicle (a port of Bullet's, the kind PolyTrack uses): chassis body, four spring wheels placed where the Kenney model's wheels are, a speed-sensitive steering curve, engine and brakes. No drift mode or arcade helpers. `Car.DEF` holds the default handling numbers |
 | `js/physics.js` | The Rapier world: gravity, the track's collision mesh and the ground |
-| `js/scenery.js` | The four jungle designs and their signs |
+| `js/scenery.js` | The worlds (jungle, desert): four labelled designs each, one per zone, with live density / distance / size dials; also sky, haze and ground colours per world |
 | `js/tuning.js` | Tuning panel (Tab): every handling, camera and track number, live |
 | `js/main.js` | Scene, light, camera, input, laps |
 | `js/assets.loader.js` | Loads the packed Kenney models |

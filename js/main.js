@@ -1,7 +1,7 @@
 // ===== Main: scene, light, camera, input, laps, HUD =====
 (function () {
   const $ = id => document.getElementById(id);
-  let renderer, scene, camera, sun, car, T, carNames = [], carIdx = 0, running = false;
+  let renderer, scene, camera, sun, hemi, sky, ground, world = 'desert', car, T, carNames = [], carIdx = 0, running = false;
   const keys = {};
   addEventListener('keydown', e => {
     if (e.target && e.target.tagName === 'INPUT') { if (e.code !== 'Tab') return; }
@@ -25,25 +25,35 @@
     scene.fog = new THREE.Fog(0xa9c9a4, 140, 620);
     camera = new THREE.PerspectiveCamera(62, 1, 0.3, 2000);
     // sky: a gradient dome that fades into the haze at the horizon
-    const sky = new THREE.Mesh(new THREE.SphereGeometry(1500, 32, 16), new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, fog: false,
+    sky = new THREE.Mesh(new THREE.SphereGeometry(1500, 32, 16), new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, fog: false,
       uniforms: { top: { value: new THREE.Color(0x4f95d6) }, mid: { value: new THREE.Color(0xbfdcef) }, haze: { value: new THREE.Color(0xa9c9a4) } },
       vertexShader: 'varying vec3 vd; void main(){ vd = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
       fragmentShader: 'uniform vec3 top; uniform vec3 mid; uniform vec3 haze; varying vec3 vd; void main(){ float t = clamp(vd.y, 0.0, 1.0); vec3 c = mix(mid, top, pow(t, 0.6)); c = mix(c, haze, exp(-max(vd.y, 0.0) * 10.0)); gl_FragColor = vec4(c, 1.0); }' }));
     scene.add(sky);
-    scene.add(new THREE.HemisphereLight(0xd8ecff, 0x41592c, 1.0));
+    hemi = new THREE.HemisphereLight(0xd8ecff, 0x41592c, 1.0); scene.add(hemi);
     sun = new THREE.DirectionalLight(0xfff0d6, 2.3); sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048); const sc = sun.shadow.camera; sc.left = sc.bottom = -90; sc.right = sc.top = 90; sc.near = 1; sc.far = 400; sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04;
     scene.add(sun, sun.target);
-    // ground
-    const gtex = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'); g.fillStyle = '#4f7a34'; g.fillRect(0, 0, 256, 256);
-      for (let k = 0; k < 3000; k++) { const v = Math.random(); g.fillStyle = v < 0.5 ? 'rgba(40,70,25,0.35)' : 'rgba(110,150,70,0.25)'; g.fillRect(Math.random() * 256, Math.random() * 256, 3, 3); }
-      const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(200, 200); t.colorSpace = THREE.SRGBColorSpace; return t; })();
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(3000, 3000), new THREE.MeshLambertMaterial({ map: gtex })); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+    // ground (its colour comes from the world, see applyWorld)
+    ground = new THREE.Mesh(new THREE.PlaneGeometry(3000, 3000), new THREE.MeshLambertMaterial()); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
     addEventListener('resize', resize); resize();
+  }
+  // sky, haze, light, ground and road colours for a world (jungle, desert)
+  function applyWorld(w) {
+    world = w; const E = Scenery.ENV[w];
+    scene.fog.color.set(E.fog); scene.fog.near = E.near; scene.fog.far = E.far;
+    const u = sky.material.uniforms; u.top.value.set(E.top); u.mid.value.set(E.mid); u.haze.value.set(E.fog);
+    hemi.color.set(E.hemiSky); hemi.groundColor.set(E.hemiGround); hemi.intensity = E.hemi; sun.color.set(E.sun); sun.intensity = E.sunI;
+    const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'); g.fillStyle = E.ground; g.fillRect(0, 0, 256, 256);
+    for (let k = 0; k < 3000; k++) { g.fillStyle = Math.random() < 0.5 ? E.specks[0] : E.specks[1]; g.fillRect(Math.random() * 256, Math.random() * 256, 3, 3); }
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(200, 200); t.colorSpace = THREE.SRGBColorSpace;
+    if (ground.material.map) ground.material.map.dispose(); ground.material.map = t; ground.material.needsUpdate = true;
+    Track.setLook({ road: E.road, skirt: E.skirt });
+    try { localStorage.setItem('r2_world', w); } catch (e) {}
   }
   function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
 
-  function buildTrack(opts) { Track.build(scene, opts); Phys.setTrack(); Scenery.build(scene); if (car) resetToRoad(true); }
+  function buildTrack(opts) { Track.build(scene, opts); Phys.setTrack(); Scenery.build(scene, world, T); if (car) resetToRoad(true); }
   function resetToRoad(toStart) {
     const S = Track.S, i = toStart ? 6 : (car.ground ? car.ground.i : 6), m = S[i];
     Car.place(car, m.x, m.z, Math.atan2(m.hx, m.hz)); lap.cur = 0; lap.armed = false; if (toStart) lap.t0 = null;
@@ -112,7 +122,7 @@
     $('laps').innerHTML = 'Lap <b>' + fmt(lap.t0 === null ? null : now - lap.t0) + '</b><br>Last ' + fmt(lap.last) + '<br>Best ' + fmt(lap.best);
     // live readout so it's easy to say what the car was doing when it felt wrong
     const slideDeg = Math.round(Math.abs(car.slipR) * 57.3), lim = slideDeg > 4;
-    $('tele').innerHTML = '<b class="' + (lim ? 'm-wide' : 'm-grip') + '">' + (car.air ? 'AIR' : lim ? 'SLIDING' : 'GRIP') + '</b> · slide ' + slideDeg + '° · bank ' + Math.round((car.ground ? car.ground.b : 0) * 57.3) + '° · ' + (car.ground && car.ground.onRoad ? 'road' : 'grass');
+    $('tele').innerHTML = '<b class="' + (lim ? 'm-wide' : 'm-grip') + '">' + (car.air ? 'AIR' : lim ? 'SLIDING' : 'GRIP') + '</b> · slide ' + slideDeg + '° · bank ' + Math.round((car.ground ? car.ground.b : 0) * 57.3) + '° · ' + (car.ground && car.ground.onRoad ? 'road' : world === 'desert' ? 'sand' : 'grass');
     if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').style.opacity = 0; }
   }
   function fillCarSelect() { $('carSel').innerHTML = carNames.map((n, i) => '<option value="' + i + '"' + (i === carIdx ? ' selected' : '') + '>' + n + '</option>').join(''); }
@@ -122,11 +132,14 @@
     await Phys.init(Car.DEF.gravity);
     await Assets.load(p => { $('loadBar').style.width = Math.round(p * 100) + '%'; });
     T = Tuning.init(opts => buildTrack(opts));
-    Track.build(scene, Tuning.trackOpts()); Phys.setTrack(); Scenery.build(scene);
+    try { world = localStorage.getItem('r2_world') || 'desert'; } catch (e) {} if (!Scenery.ENV[world]) world = 'desert';
+    applyWorld(world); Track.build(scene, Tuning.trackOpts()); Phys.setTrack(); Scenery.build(scene, world, T);
     carNames = Assets.carNames(); let saved = null; try { saved = localStorage.getItem('r1_car'); } catch (e) {}
     carIdx = Math.max(0, carNames.indexOf(saved || 'race'));
     car = Car.create(scene, carNames[carIdx]); resetToRoad(true);
     fillCarSelect(); $('carSel').onchange = e => { carIdx = +e.target.value; nextCar(0); };
+    $('worldSel').innerHTML = Object.entries(Scenery.WORLDS).map(([k, n]) => '<option value="' + k + '"' + (k === world ? ' selected' : '') + '>' + n + '</option>').join('');
+    $('worldSel').onchange = e => { applyWorld(e.target.value); buildTrack(Tuning.trackOpts()); e.target.blur(); };
     $('loading').style.display = 'none'; $('start').style.display = 'flex';
     $('go').onclick = () => { $('start').style.display = 'none'; running = true; lap.t0 = performance.now(); $('view').focus(); };
     last = performance.now(); requestAnimationFrame(frame);
