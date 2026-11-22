@@ -1,19 +1,28 @@
-// ===== Scenery: four labelled jungle designs, one per section of the loop =====
+// ===== Scenery: four labelled designs per world (jungle, desert), one per section of the loop =====
 // Each zone is one straight plus the corner after it: A flat corner, B 10°, C 20°, D 30° bank. Each is a separate idea so we can compare them side by side.
+// Every zone has three live dials (tuning panel, Scenery): how much stuff, how close to the road, how big.
 const Scenery = (function () {
-  const ZONES = {
+  const JUNGLE = {
     A: { name: 'Rainforest wall', note: 'Tall dark trees and thick undergrowth packed tight to the road (Kenney Nature Kit)' },
     B: { name: 'Tropical', note: 'Palms, big leaves and flowers; open and bright (Kenney Nature Kit)' },
     C: { name: 'Ruins and rocks', note: 'Boulders, stone pillars, broken walls, logs and mushrooms (Kenney Nature Kit)' },
     D: { name: 'v17 canopy', note: 'The giant code-built trees from v17, with crowns over the road' }
   };
-  let group = null, seed = 1;
+  const DESERT = {
+    A: { name: 'Open dunes', note: 'Big empty sand dunes rolling away, the odd cactus and rock; long views, very sparse' },
+    B: { name: 'Canyon', note: 'Tall red sandstone pillars and cliffs packed tight to the road, like a gorge' },
+    C: { name: 'Cactus scrub', note: 'A field of tall cacti, dry bushes and stones, with a fence along the road; medium density' },
+    D: { name: 'Oasis camp', note: 'A palm-ringed pool with tents and a campfire beside the road; one dense landmark, sparse elsewhere' }
+  };
+  let group = null, seed = 1, cur = { d: 1, n: 0, s: 1 }, world = 'desert';
+  const ZONES_OF = { jungle: JUNGLE, desert: DESERT };
   const R = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
   const pick = a => a[Math.floor(R() * a.length)];
 
   // spots beside the road in one zone. side: 1 outside, -1 inside. lat0..lat1 = metres beyond the road's edge (or beyond the outer bank)
   function spots(zone, n, side, lat0, lat1) {
     const S = Track.S.filter(m => m.zone === zone), E = Track.EDGE(), out = [];
+    n = Math.round(n * cur.d); lat0 = Math.max(-1, lat0 + cur.n); lat1 = Math.max(lat0 + 0.5, lat1 + cur.n);
     for (let t = 0; t < n; t++) {
       const m = S[Math.floor(R() * S.length)];
       const clear = side > 0 ? E + (0.06 + 2 * E * Math.tan(m.b)) / 0.38 + 1.5 : E + 1;
@@ -24,31 +33,38 @@ const Scenery = (function () {
   }
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3();
   // instance a Kenney model at many spots. each item: { x, y, z, h (height in metres), ry, tilt }
-  function instance(name, items, cast) {
+  // tint: recolour a model (e.g. grey Kenney rocks to sandstone), keeping its light and dark parts
+  const tintCache = {};
+  function tinted(mat, tint) {
+    if (!tint) return mat; const key = mat.uuid + tint; if (tintCache[key]) return tintCache[key];
+    const c = mat.color, l = 0.3 * c.r + 0.59 * c.g + 0.11 * c.b, m = mat.clone(); m.color = new THREE.Color(tint).multiplyScalar(0.55 + 0.9 * l);
+    return (tintCache[key] = m);
+  }
+  function instance(name, items, cast, tint) {
     const parts = Assets.parts(name); if (!parts.length || !items.length) return;
-    for (const [geo, mat, rel] of parts) {
-      const im = new THREE.InstancedMesh(geo, mat, items.length);
+    for (const [geo, mat0, rel] of parts) {
+      const mat = tinted(mat0, tint), im = new THREE.InstancedMesh(geo, mat, items.length);
       items.forEach((it, i) => { const k = it.h / parts.h; e.set(it.tilt || 0, it.ry || 0, (it.tilt2 || 0)); q.setFromEuler(e); v.set(it.x, it.y || 0, it.z); sc.set(k * (it.sx || 1), k, k * (it.sx || 1)); m4.compose(v, q, sc).multiply(rel); im.setMatrixAt(i, m4); });
       im.castShadow = cast !== false; im.receiveShadow = true; group.add(im);
     }
   }
-  const spread = (name, list, h0, h1, extra) => instance(name, list.map(p => Object.assign({ x: p.x, z: p.z, h: h0 + R() * (h1 - h0), ry: R() * 6.28 }, extra || {})));
+  const spread = (name, list, h0, h1, extra, tint) => instance(name, list.map(p => Object.assign({ x: p.x, z: p.z, h: (h0 + R() * (h1 - h0)) * cur.s, ry: R() * 6.28 }, extra || {})), true, tint);
   // several models share a list of spots at random
-  function mix(names, list, h0, h1, extra) { const by = {}; for (const p of list) { const n = pick(names); (by[n] = by[n] || []).push(p); } for (const n in by) spread(n, by[n], h0, h1, extra); }
+  function mix(names, list, h0, h1, extra, tint) { const by = {}; for (const p of list) { const n = pick(names); (by[n] = by[n] || []).push(p); } for (const n in by) spread(n, by[n], h0, h1, extra, tint); }
   function patches(zone, n, cols, r0, r1) {   // flat colour patches on the ground (sand, leaf litter, dirt)
-    const list = spots(zone, n, R() < 0.5 ? 1 : -1, 0, 30).concat(spots(zone, n, -1, 0, 20));
+    r0 *= cur.s; r1 *= cur.s; const list = spots(zone, n, R() < 0.5 ? 1 : -1, 0, 30).concat(spots(zone, n, -1, 0, 20));
     const im = new THREE.InstancedMesh(new THREE.CircleGeometry(1, 9).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0xffffff }), list.length), c = new THREE.Color();
     list.forEach((p, i) => { const r = r0 + R() * (r1 - r0); m4.compose(v.set(p.x, 0.03 + i * 0.0001, p.z), q.identity(), sc.set(r, 1, r * (0.6 + R() * 0.6))); im.setMatrixAt(i, m4); im.setColorAt(i, c.set(pick(cols))); });
     im.receiveShadow = true; group.add(im);
   }
 
   function sign(zone) {
-    const S = Track.S.filter(m => m.zone === zone), m = S[Math.min(S.length - 1, 12)], z = ZONES[zone];
+    const S = Track.S.filter(m => m.zone === zone), m = S[Math.min(S.length - 1, 12)], z = ZONES_OF[world][zone], col = world === 'desert' ? ['#5a3519', '#f6c36a', '#f3e3c8'] : ['#16351f', '#f4c430', '#cfe8d2'];
     const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 384; const g = cv.getContext('2d');
-    g.fillStyle = '#16351f'; g.fillRect(0, 0, 1024, 384); g.strokeStyle = '#f4c430'; g.lineWidth = 14; g.strokeRect(7, 7, 1010, 370);
-    g.fillStyle = '#f4c430'; g.font = 'bold 190px system-ui, sans-serif'; g.fillText(zone, 50, 230);
+    g.fillStyle = col[0]; g.fillRect(0, 0, 1024, 384); g.strokeStyle = col[1]; g.lineWidth = 14; g.strokeRect(7, 7, 1010, 370);
+    g.fillStyle = col[1]; g.font = 'bold 190px system-ui, sans-serif'; g.fillText(zone, 50, 230);
     g.fillStyle = '#ffffff'; g.font = 'bold 84px system-ui, sans-serif'; g.fillText(z.name, 230, 175);
-    g.font = '36px system-ui, sans-serif'; g.fillStyle = '#cfe8d2';
+    g.font = '36px system-ui, sans-serif'; g.fillStyle = col[2];
     const words = z.note.split(' '); let line = '', y = 250; for (const w of words) { if (g.measureText(line + w).width > 740) { g.fillText(line, 232, y); line = ''; y += 46; } line += w + ' '; } g.fillText(line, 232, y);
     const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
     const board = new THREE.Mesh(new THREE.PlaneGeometry(12, 4.5), new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
@@ -116,12 +132,80 @@ const Scenery = (function () {
     patches('D', 40, [0x5a3d26, 0x3a5426], 3, 6);
   }
 
-  function build(scene) {
+  // ---------------- desert ----------------
+  const SANDSTONE = 0xc8683a, PALE = 0xd9b98c, KHAKI = 0x9c9455;
+  const SAND = [0xe2c48e, 0xd8b67c, 0xcfa96c, 0xe8cf9e];
+  function mounds(list, col, flat) {   // smooth sand dunes: squashed half-spheres
+    const geo = new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), im = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ color: 0xffffff }), list.length), c = new THREE.Color();
+    list.forEach((p, i) => { const w = p.w * cur.s; e.set(0, R() * 6.28, 0); q.setFromEuler(e); m4.compose(v.set(p.x, -0.2, p.z), q, sc.set(w, w * (flat || 0.16) * (0.6 + R() * 0.8), w * (0.5 + R() * 0.5))); im.setMatrixAt(i, m4); im.setColorAt(i, c.set(pick(col))); });
+    im.receiveShadow = true; im.castShadow = true; group.add(im);
+  }
+  function dZoneA() {   // open dunes: very sparse, big shapes far out
+    mounds(spots('A', 30, 1, 35, 140).concat(spots('A', 12, -1, 30, 70)).map(p => Object.assign(p, { w: 12 + R() * 22 })), SAND);
+    mounds(spots('A', 22, 1, 120, 320).map(p => Object.assign(p, { w: 40 + R() * 60 })), SAND, 0.12);   // horizon dunes
+    mix(['cactus_short', 'cactus_tall'], spots('A', 10, 1, 2, 40).concat(spots('A', 6, -1, 2, 30)), 1.6, 4.5);
+    mix(['rock_smallA', 'rock_smallC', 'rock_smallF', 'rock_largeE'], spots('A', 14, 1, 1, 50).concat(spots('A', 10, -1, 1, 30)), 0.6, 2.2, null, PALE);
+    patches('A', 16, [0xe8d2a6, 0xcfab72], 5, 12);
+  }
+  function dZoneB() {   // canyon: tall red pillars right at the road, cliffs behind
+    const tall = ['rock_tallA', 'rock_tallB', 'rock_tallC', 'rock_tallD', 'rock_tallE', 'rock_tallF', 'rock_tallG', 'rock_tallH', 'rock_tallI', 'rock_tallJ'];
+    mix(tall, spots('B', 80, 1, 0, 9).concat(spots('B', 60, -1, 0.5, 8)), 12, 26, null, SANDSTONE);
+    mix(['cliff_large_rock', 'cliff_rock', 'cliff_top_rock', 'cliff_half_rock'], spots('B', 50, 1, 8, 30).concat(spots('B', 34, -1, 7, 24)), 16, 32, null, SANDSTONE);
+    mix(['rock_largeA', 'rock_largeB', 'rock_largeC', 'rock_largeD', 'rock_largeF'], spots('B', 50, 1, -0.5, 6).concat(spots('B', 40, -1, 0, 6)), 2.5, 6, null, SANDSTONE);
+    mix(['rock_smallB', 'rock_smallD', 'rock_smallG'], spots('B', 60, 1, -1, 5).concat(spots('B', 50, -1, -0.5, 5)), 0.5, 1.2, null, SANDSTONE);
+    patches('B', 40, [0xb8693f, 0xa95c36, 0xc47a4a], 3, 8);
+  }
+  function dZoneC() {   // cactus scrub: even medium density, fence along the outside
+    mix(['cactus_tall'], spots('C', 90, 1, 1, 45).concat(spots('C', 70, -1, 1, 35)), 4, 8);
+    mix(['cactus_short'], spots('C', 110, 1, 0, 40).concat(spots('C', 90, -1, 0, 30)), 1.4, 3);
+    mix(['plant_bush', 'plant_bushTriangle', 'plant_bushSmall'], spots('C', 120, 1, -0.5, 40).concat(spots('C', 100, -1, 0, 30)), 0.8, 1.8, null, KHAKI);
+    mix(['rock_smallA', 'rock_smallE', 'rock_smallH', 'rock_smallI'], spots('C', 90, 1, -0.5, 30).concat(spots('C', 70, -1, 0, 25)), 0.4, 1.3, null, PALE);
+    mix(['log', 'stump_old'], spots('C', 14, 1, 2, 30), 1, 2, null, 0xb89a72);   // bleached dead wood
+    // fence: posts just outside the road edge, following the road
+    const S = Track.S.filter(m => m.zone === 'C'), E = Track.EDGE(), posts = [];
+    for (let k = 0; k < S.length; k += 4) { const m = S[k], u = E + (0.06 + 2 * E * Math.tan(m.b)) / 0.38 + 2.5 + cur.n; posts.push({ x: m.x + m.ox * u, z: m.z + m.oz * u, h: 1.4 * cur.s, ry: Math.atan2(m.hx, m.hz) + Math.PI / 2 }); }
+    instance('fence_simple', posts, true, 0x8a6a48);
+    patches('C', 40, [0xcfa96c, 0xc29a5e, 0xd8b67c], 3, 7);
+  }
+  function dZoneD() {   // oasis camp: one dense landmark on the outside of the straight, sparse elsewhere
+    const S = Track.S.filter(m => m.zone === 'D' && m.kind === 'straight'), m = S[Math.floor(S.length * 0.55)], E = Track.EDGE();
+    const off = E + 26 + cur.n, cx = m.x + m.ox * off, cz = m.z + m.oz * off, pr = 13 * cur.s;
+    const ring = (n, r0, r1) => Array.from({ length: Math.round(n * cur.d) }, () => { const a = R() * 6.28, r = r0 + R() * (r1 - r0); return { x: cx + Math.cos(a) * r, z: cz + Math.sin(a) * r }; });
+    const water = new THREE.Mesh(new THREE.CircleGeometry(pr, 40).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0x3fa3b0, transparent: true, opacity: 0.9 }));
+    water.position.set(cx, 0.08, cz); group.add(water);
+    const wet = new THREE.Mesh(new THREE.CircleGeometry(pr * 1.5, 40).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0x9c8a5a })); wet.position.set(cx, 0.04, cz); wet.receiveShadow = true; group.add(wet);
+    mix(['tree_palmTall', 'tree_palmBend', 'tree_palmDetailedTall', 'tree_palm', 'tree_palmShort'], ring(26, pr * 1.05, pr * 2.1), 8, 15);
+    mix(['plant_bushLarge', 'plant_bush', 'grass_large', 'grass_leafsLarge'], ring(50, pr * 1.0, pr * 1.9), 1, 2.4);
+    mix(['flower_yellowA', 'flower_redA'], ring(24, pr * 1.0, pr * 1.6), 0.7, 1.1);
+    const camp = ring(5, pr * 2.2, pr * 2.9);
+    mix(['tent_detailedOpen', 'tent_smallClosed'], camp, 3, 4.5, null, 0xe6d3b0);
+    instance('campfire_stones', [{ x: cx + pr * 2.0, z: cz, h: 0.5 }]); instance('campfire_logs', [{ x: cx + pr * 2.0, z: cz, h: 0.7 }]);
+    instance('log_stack', ring(2, pr * 2.3, pr * 2.6).map(p => Object.assign(p, { h: 1.2, ry: R() * 6 })));
+    // sparse elsewhere in the zone
+    mix(['tree_palmShort', 'tree_palmBend'], spots('D', 10, 1, 6, 50).concat(spots('D', 6, -1, 4, 30)), 6, 11);
+    mix(['cactus_short', 'cactus_tall'], spots('D', 14, 1, 2, 50).concat(spots('D', 10, -1, 2, 30)), 1.5, 5);
+    mix(['rock_largeE', 'rock_smallC', 'rock_smallF'], spots('D', 18, 1, 1, 50).concat(spots('D', 12, -1, 1, 30)), 0.8, 3, null, PALE);
+    mounds(spots('D', 14, 1, 70, 200).map(p => Object.assign(p, { w: 25 + R() * 40 })), SAND, 0.13);
+    patches('D', 20, [0xe2c48e, 0xcfa96c], 4, 10);
+  }
+
+  // dials: { sceneA, nearA, sizeA, ... } from the tuning panel
+  function build(scene, which, dials) {
+    if (which) world = which;
     if (group) { scene.remove(group); group.traverse(o => { if (o.isInstancedMesh) o.dispose(); }); }
     group = new THREE.Group(); seed = 12345;
-    zoneA(); zoneB(); zoneC(); zoneD();
+    const fns = world === 'desert' ? [dZoneA, dZoneB, dZoneC, dZoneD] : [zoneA, zoneB, zoneC, zoneD];
+    'ABCD'.split('').forEach((z, k) => { const d = dials || {}; cur = { d: d['scene' + z] ?? 1, n: d['near' + z] ?? 0, s: d['size' + z] ?? 1 }; fns[k](); });
+    cur = { d: 1, n: 0, s: 1 };
     for (const z of 'ABCD') sign(z);
     scene.add(group);
   }
-  return { build, ZONES };
+  // the look of each world: sky, haze, light, ground and road colours
+  const ENV = {
+    jungle: { fog: 0xa9c9a4, near: 140, far: 620, top: 0x4f95d6, mid: 0xbfdcef, hemiSky: 0xd8ecff, hemiGround: 0x41592c, hemi: 1.0, sun: 0xfff0d6, sunI: 2.3,
+      ground: '#4f7a34', specks: ['rgba(40,70,25,0.35)', 'rgba(110,150,70,0.25)'], skirt: 0x4f7a34, road: '#5a5650' },
+    desert: { fog: 0xe9d6b0, near: 180, far: 800, top: 0x4c8fd4, mid: 0xf2dfbd, hemiSky: 0xfff1d6, hemiGround: 0xb98f5c, hemi: 1.05, sun: 0xfff0cf, sunI: 3.0,
+      ground: '#d8b67e', specks: ['rgba(170,130,80,0.30)', 'rgba(245,225,180,0.35)'], skirt: 0xd2ad74, road: '#86745f' }
+  };
+  return { build, get ZONES() { return ZONES_OF[world]; }, get world() { return world; }, ENV, WORLDS: { jungle: 'Jungle', desert: 'Desert' } };
 })();
