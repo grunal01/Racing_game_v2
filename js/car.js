@@ -6,8 +6,8 @@ const Car = (function () {
   // every number here can be changed live in the tuning panel (Tab)
   const DEF = {
     topSpeed: 52, accel: 17, brake: 30, reverse: 9,
-    gripF: 4.2, gripR: 4.4, tyrePeak: 9, tyreFade: 1.25, driftMax: 32, driftCatch: 10, weightShift: 0.5, downforce: 0.7, bankGrip: 1.0,
-    steerLock: 0.5, steerSpeed: 5, steerFall: 45, yawInertia: 1.7, brakeRear: 0.5, traction: 0.55,
+    gripF: 4.2, gripR: 4.4, tyrePeak: 9, tyreFade: 1.25, driftMax: 18, driftCatch: 10, slideKeep: 0.75, weightShift: 0.35, downforce: 0.7, bankGrip: 1.0,
+    steerLock: 0.5, steerSpeed: 5, steerFall: 45, yawInertia: 1.7, brakeRear: 0.35, traction: 0.55,
     offTop: 0.62, offGrip: 0.6,
     camDist: 9.5, camHeight: 3.6, camLag: 7, camLook: 6, fov: 62, fovBoost: 14
   };
@@ -90,7 +90,11 @@ const Car = (function () {
     const du = FxR + FxF * cd - FyF * sd + r * w;
     const dw = FyF * cd + FxF * sd + FyR - r * u;
     const dr = (A * (FyF * cd + FxF * sd) - B * FyR) / T.yawInertia;
+    const sp0 = Math.hypot(u, w), spLong = sp0 + (FxR + FxF * cd) * dt * Math.sign(u || 1);
     u += du * dt; w += dw * dt; r += dr * dt;
+    // slides keep momentum: while the rear is sliding, most of the speed the tyres would scrub off is kept (driving and braking still count)
+    const slideK = Math.max(0, Math.min(1, (Math.abs(aR) - 0.05) / 0.12)) * T.slideKeep;
+    if (slideK > 0 && !c.air && Math.abs(u) > 8) { const sp1 = Math.hypot(u, w); if (sp1 < spLong && sp1 > 0.1) { const k = (sp1 + (spLong - sp1) * slideK) / sp1; u *= k; w *= k; } }
     // drift catch: past the set drift angle the car is eased back, so a slide holds its angle instead of snapping into a spin
     const over = Math.abs(aR) - T.driftMax * Math.PI / 180;
     if (over > 0 && !c.air && Math.abs(u) > 6) r += Math.sign(aR) * over * T.driftCatch * 10 * dt;
