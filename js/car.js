@@ -10,7 +10,7 @@ const Car = (function () {
     topSpeed: 70, accel: 15, brake: 26, reverse: 8,
     turnRate: 2, turnFall: 100, steerSpeed: 5,
     grip: 3.2, slideMax: 50, slideHold: 0.35, slideScrub: 0.12, offGrip: 0.6, offTop: 0.62,
-    suspStiff: 60, suspDamp: 4, suspTravel: 0.3, gravity: 20, comY: -0.4,
+    suspStiff: 60, suspDamp: 4, suspTravel: 0.3, gravity: 20, comY: -0.4, landing: 4,
     camDist: 9.5, camHeight: 3.6, camLag: 7, camLook: 6, fov: 62, fovBoost: 14
   };
   const MASS = 1000, REST = 0.32;
@@ -168,6 +168,12 @@ const Car = (function () {
       c.lonA = acc;
     }
 
+    // soft landings (arcade): just before touchdown the fall speed is capped, so a big jump lands instead of slamming the body
+    // into the road; forward speed is untouched
+    if (c.airT > 0.05) {
+      const lvA = rb.linvel(), above = rb.translation().y - Track.surface(c.x, c.z, c.hint).y;
+      if (lvA.y < -T.landing && above < 2.5) rb.setLinvel({ x: lvA.x, y: -T.landing, z: lvA.z }, true);
+    }
     v.updateVehicle(dt);
     Phys.step();
     readState(c);

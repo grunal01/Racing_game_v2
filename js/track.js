@@ -1,12 +1,13 @@
 // ===== Track: the R3 test circuit, built from a list of pieces =====
-// Sectors (zone letters label the scenery designs): A = start straight (obstacle alley, jump) + fast left sweeper,
-// B = straight through a tunnel + tight left hairpin, C = a right turn into S-bends, D = straight + long banked left carousel.
+// Wide, open and fast: no tight corners (the tightest is 100 m radius). Sectors (zone letters label the scenery designs):
+// A = start straight (obstacle alley, jump) + big banked left sweeper, B = straight through a tunnel + a wide left U-turn,
+// C = long flowing esses (right, then left), D = straight + a huge banked left carousel.
 // The two long straights are worked out at build time so the loop always closes exactly.
 // The track is a list of samples, one per metre along the centre line. Each sample knows its position, heading, its left
 // vector (o), road half-width, height, signed bank (tilt) and slope. The ground around it is a terrain grid that follows
 // the road and rolls gently further out. Everything else (meshes, the car's ground, collision) is built from that.
 const Track = (function () {
-  const D = { W: 14, KERB: 1.4, BANK: 10, HILLS: 1, JUMP: 1.4 };   // road width, kerb width (m), sweeper bank (carousel gets double), hills (x), jump lip height (m)
+  const D = { W: 14, KERB: 1.4, BANK: 10, HILLS: 1, JUMP: 2.5, JUMPA: 14 };   // road width, kerb width (m), sweeper bank (carousel gets double), hills (x), jump height (m), jump lip angle (degrees)
   const BASE = 0.06, ALLEY = 15, CELL = 4;                           // road sits a hair above the ground; alley half-width; terrain grid spacing (m)
   let P = Object.assign({}, D), S = [], LEN = 0, group = null, look = { road: '#5a5650', skirt: 0x4f7a34, groundMat: null }, T = null, marks = {};
   const sstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -18,19 +19,16 @@ const Track = (function () {
     const B = P.BANK;
     return [
       { zone: 'A', kind: 'straight', len: 'X1', h: 0, tag: 'start' },
-      { zone: 'A', kind: 'bend', r: 110, turn: 90, bank: B, h: 4 },          // fast left sweeper, climbing
+      { zone: 'A', kind: 'bend', r: 170, turn: 90, bank: B, h: 4 },          // big left sweeper, climbing
       { zone: 'B', kind: 'straight', len: 'X2', h: 4, tag: 'tunnel' },        // through the hill
-      { zone: 'B', kind: 'bend', r: 28, turn: 180, bank: 0, h: 1.5 },        // tight left hairpin, dropping
-      { zone: 'B', kind: 'straight', len: 40, h: 1 },
-      { zone: 'C', kind: 'bend', r: 40, turn: -90, bank: 0, h: 0.5 },        // right
-      { zone: 'C', kind: 'straight', len: 50, h: 2 },
-      { zone: 'C', kind: 'bend', r: 35, turn: -90, bank: 0, h: 1 },          // S-bends: right, left, left, right
-      { zone: 'C', kind: 'bend', r: 35, turn: 90, bank: 0, h: 2.5 },
-      { zone: 'C', kind: 'bend', r: 35, turn: 90, bank: 0, h: 1.5 },
-      { zone: 'C', kind: 'straight', len: 20, h: 1 },
-      { zone: 'C', kind: 'bend', r: 35, turn: -90, bank: 0, h: 1 },
-      { zone: 'D', kind: 'straight', len: 300, h: 2.5 },
-      { zone: 'D', kind: 'bend', r: 90, turn: 180, bank: 2 * B, h: 0 }       // long left carousel, back down to the start
+      { zone: 'B', kind: 'bend', r: 100, turn: 150, bank: 0, h: 1.5 },       // wide left U-turn, dropping
+      { zone: 'B', kind: 'straight', len: 60, h: 1 },
+      { zone: 'C', kind: 'bend', r: 150, turn: -70, bank: 0, h: 0.5 },       // long flowing esses: right...
+      { zone: 'C', kind: 'straight', len: 80, h: 2.5 },
+      { zone: 'C', kind: 'bend', r: 150, turn: 40, bank: 0, h: 1 },          // ...then left
+      { zone: 'C', kind: 'straight', len: 60, h: 1.5 },
+      { zone: 'D', kind: 'straight', len: 300, h: 3 },
+      { zone: 'D', kind: 'bend', r: 130, turn: 150, bank: 2 * B, h: 0 }      // huge banked left carousel, back down to the start
     ];
   }
   const pieceLen = (p, X) => p.kind === 'straight' ? (typeof p.len === 'string' ? X[p.len] : p.len) : Math.abs(p.turn) * Math.PI / 180 * p.r;
@@ -58,7 +56,8 @@ const Track = (function () {
     // height: each piece eases from the previous piece's end height to its own (zero slope at the joins)
     const hEnd = bounds.map(b => b.p.h), hAt = (bi, local, len) => lerp(hEnd[(bi + bounds.length - 1) % bounds.length], hEnd[bi], sstep(0, len, local)) * P.HILLS;
     // jump: a kicker on the start straight that rises to a lip, then the road falls away for the landing
-    const st = bounds[0], J0 = 300, KICK = 28, LAND = 50;
+    // the kicker curves up to the lip angle (a parabola, so its slope at the lip is 2 x height / length)
+    const J0 = 300, KICK = Math.max(4, 2 * P.JUMP / Math.tan(Math.max(1, P.JUMPA) * Math.PI / 180)), LAND = 110;
     const jumpH = l => { const t = l - J0; if (t < 0 || t > KICK + LAND) return 0; return t <= KICK ? P.JUMP * (t / KICK) ** 2 : P.JUMP * (1 - sstep(KICK, KICK + LAND, t)); };
     // obstacle alley: the start straight widens to ALLEY each side between these points
     const AL0 = 40, AL1 = 230, TAPER = 25;
@@ -80,7 +79,7 @@ const Track = (function () {
     const N = S.length;
     for (let i = 0; i < N; i++) { const a = S[(i + N - 1) % N], c = S[(i + 1) % N]; S[i].slope = (c.h - a.h) / 2; }
     // the tunnel runs through the middle of the straight into the hairpin
-    const tun = S.filter(m => m.tag === 'tunnel'); if (tun.length > 150) { const a = tun[Math.floor((tun.length - 90) / 2)].i; marks.tunnel = [a, a + 90]; }
+    const tun = S.filter(m => m.tag === 'tunnel'); if (tun.length > 180) { const a = tun[Math.floor((tun.length - 110) / 2)].i; marks.tunnel = [a, a + 110]; }
   }
 
   // height of the road surface at lateral offset u (metres to the left) on sample m
