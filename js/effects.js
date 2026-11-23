@@ -104,13 +104,13 @@ const Effects = (function () {
       } else tr.last = null;
       if (car.air) return;
       // particles: how many this frame
-      const rate = (loose ? speed * (fam === 'water' ? 3 : fam === 'mud' ? 1.2 : 1.6) : 0) + (sliding ? slide * (fam === 'tarmac' ? 2 : 1.2) : 0);
+      const rate = ((loose ? speed * 1.6 : 0) + (sliding ? slide * (fam === 'tarmac' ? 2 : 1.4) : 0)) * (sf.spray == null ? 1 : sf.spray);   // per-surface spray amount (surfaces.js)
       let n = rate * dt; while (n > 0) {
         if (n < 1 && Math.random() > n) break; n -= 1;
         const rx = (Math.random() - 0.5), rz = (Math.random() - 0.5), y = gy + 0.15;
         switch (fam) {
           case 'mud': emit(wp.x, y, wp.z, -fx * speed * 0.15 + rx * 4, 3 + Math.random() * 4, -fz * speed * 0.15 + rz * 4, 0.9, 0.35, 0.3, 16, 0.5, new THREE.Color(sf.color).multiplyScalar(0.8).getHex(), 0.95); break;
-          case 'water': emit(wp.x, y, wp.z, -fx * speed * 0.1 + rx * 6, 2.5 + Math.random() * 5, -fz * speed * 0.1 + rz * 6, 0.7, 0.45, 1.4, 11, 0.8, 0xdcf0f7, 0.7); break;
+          case 'water': emit(wp.x, y, wp.z, -fx * speed * 0.06 + rx * 3, 1.2 + Math.random() * 2.2, -fz * speed * 0.06 + rz * 3, 0.55, 0.35, 0.9, 11, 0.8, 0xdcf0f7, 0.55); break;
           case 'snow': case 'slush': emit(wp.x, y, wp.z, -fx * speed * 0.08 + rx * 3, 1 + Math.random() * 2.5, -fz * speed * 0.08 + rz * 3, 1.1, 0.7, 2.6, fam === 'slush' ? 6 : 1.2, 1.2, fam === 'slush' ? 0xc5d0d6 : 0xffffff, 0.6); break;
           case 'ice': if (Math.random() < 0.4) emit(wp.x, y, wp.z, rx * 3, 1 + Math.random() * 2, rz * 3, 0.4, 0.22, 0.12, 4, 1, 0xffffff, 0.95); break;
           case 'tarmac': emit(wp.x, y, wp.z, rx * 1.5, 0.6 + Math.random(), rz * 1.5, 1.6, 1.0, 4.5, -0.3, 1.5, 0xe2e2e2, 0.28); break;

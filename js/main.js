@@ -144,7 +144,7 @@
     T = Tuning.init(opts => buildTrack(opts));
     try { world = localStorage.getItem('r31_map') || 'desert'; } catch (e) {} if (!Surfaces.MAPS[world]) world = 'desert';
     applyWorld(world); Track.build(scene, Tuning.trackOpts()); Phys.setTrack(); Scenery.build(scene, Surfaces.MAPS[world].scenery, T); Obstacles.build(scene, world); Effects.init(scene);
-    Obstacles.onHit = (h, TT) => toast(h.broke ? 'Smashed through at ' + Math.round(h.kmh) + ' km/h' : h.it.kind === 'break' ? 'Wall held: ' + Math.round(h.kmh) + ' km/h into it (needs ' + TT.breakKmh + ')' : (h.glancing ? 'Glancing hit: ' : 'Head-on: ') + Math.round(h.kmh) + ' km/h into the ' + h.it.label);
+    Obstacles.onHit = (h, TT) => toast(h.broke ? 'Smashed through at ' + Math.round(h.kmh) + ' km/h' : h.it.kind === 'break' ? 'Rock held: ' + Math.round(h.kmh) + ' km/h into it (needs ' + TT.breakKmh + ')' : (h.glancing ? 'Glancing hit: ' : 'Head-on: ') + Math.round(h.kmh) + ' km/h into the ' + h.it.label);
     carNames = Assets.carNames(); let saved = null; try { saved = localStorage.getItem('r1_car'); } catch (e) {}
     carIdx = Math.max(0, carNames.indexOf(saved || 'race'));
     car = Car.create(scene, carNames[carIdx]); resetToRoad(true);
