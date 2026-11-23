@@ -166,8 +166,10 @@ const Track = (function () {
   function canvasTex(w, h, draw) { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; }
   function roadTex() {
     return canvasTex(512, 256, (g, w, h) => {
-      g.fillStyle = look.road; g.fillRect(0, 0, w, h);
-      for (let k = 0; k < 6000; k++) { const v = 70 + Math.random() * 40; g.fillStyle = `rgba(${v},${v - 3},${v - 8},0.5)`; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); }
+      // with sector colours the texture is a light neutral that the surface colour tints; otherwise it's the world's road colour
+      const tinted = !!look.sectorColors;
+      g.fillStyle = tinted ? '#e6e4e0' : look.road; g.fillRect(0, 0, w, h);
+      for (let k = 0; k < 6000; k++) { const v = (tinted ? 170 : 70) + Math.random() * (tinted ? 70 : 40); g.fillStyle = `rgba(${v},${v - 3},${v - 8},0.5)`; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); }
       g.fillStyle = 'rgba(0,0,0,0.12)'; for (const v of [0.3, 0.7]) g.fillRect(0, h * v - 18, w, 36);   // worn racing lines
       g.fillStyle = '#f2efe6'; g.fillRect(0, h * 0.035, w, 6); g.fillRect(0, h * 0.965 - 6, w, 6);       // edge lines
       g.fillRect(0, h / 2 - 3, w * 0.45, 6);                                                             // centre dash
@@ -238,8 +240,14 @@ const Track = (function () {
     if (group) { scene.remove(group); group.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
     sample(); buildTerrain();
     group = new THREE.Group();
-    const roadMat = new THREE.MeshLambertMaterial({ map: roadTex() });
-    group.add(strip(m => -m.half, m => m.half, roadMat));
+    // the road is coloured by each sector's surface, blending over ~30 m where one surface meets the next
+    let cols = null;
+    if (look.sectorColors) {
+      const base = S.map(m => new THREE.Color(look.sectorColors['ABCD'.indexOf(m.zone)] || 0x888888)), n = S.length, W = 15;
+      cols = S.map((m, i) => { const c = new THREE.Color(0, 0, 0); for (let k = -W; k <= W; k++) c.add(base[(i + k + n) % n]); return c.multiplyScalar(1 / (2 * W + 1)); });
+    }
+    const roadMat = new THREE.MeshLambertMaterial({ map: roadTex(), vertexColors: !!cols });
+    group.add(strip(m => -m.half, m => m.half, roadMat, cols ? k => cols[k % S.length] : null));
     const red = new THREE.Color(0xd62828), wht = new THREE.Color(0xf5f5f5), kerbMat = new THREE.MeshLambertMaterial({ vertexColors: true });
     const stripe = k => (Math.floor(k / 4) % 2 ? red : wht);
     group.add(strip(m => -m.E, m => -m.half, kerbMat, stripe), strip(m => m.half, m => m.E, kerbMat, stripe));

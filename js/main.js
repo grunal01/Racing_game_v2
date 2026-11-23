@@ -38,9 +38,9 @@
     ground = new THREE.Mesh(new THREE.PlaneGeometry(3000, 3000), new THREE.MeshLambertMaterial()); ground.rotation.x = -Math.PI / 2; ground.position.y = -0.5; ground.receiveShadow = true; scene.add(ground);
     addEventListener('resize', resize); resize();
   }
-  // sky, haze, light, ground and road colours for a world (jungle, desert)
+  // a map: its surfaces, sky, haze, light, ground and road colours (country, jungle, tundra, desert)
   function applyWorld(w) {
-    world = w; const E = Scenery.ENV[w];
+    world = w; Surfaces.setMap(w); const E = Scenery.ENV[w];
     scene.fog.color.set(E.fog); scene.fog.near = E.near; scene.fog.far = E.far;
     const u = sky.material.uniforms; u.top.value.set(E.top); u.mid.value.set(E.mid); u.haze.value.set(E.fog);
     hemi.color.set(E.hemiSky); hemi.groundColor.set(E.hemiGround); hemi.intensity = E.hemi; sun.color.set(E.sun); sun.intensity = E.sunI;
@@ -48,12 +48,19 @@
     for (let k = 0; k < 3000; k++) { g.fillStyle = Math.random() < 0.5 ? E.specks[0] : E.specks[1]; g.fillRect(Math.random() * 256, Math.random() * 256, 3, 3); }
     const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(200, 200); t.colorSpace = THREE.SRGBColorSpace;
     if (ground.material.map) ground.material.map.dispose(); ground.material.map = t; ground.material.needsUpdate = true;
-    Track.setLook({ road: E.road, skirt: E.skirt, groundMat: ground.material, tunnel: E.tunnel });
-    try { localStorage.setItem('r2_world', w); } catch (e) {}
+    Track.setLook({ road: E.road, skirt: E.skirt, groundMat: ground.material, tunnel: E.tunnel, sectorColors: [0, 1, 2, 3].map(k => Surfaces.DEF[Surfaces.sectorId(k)].color) });
+    try { localStorage.setItem('r31_map', w); } catch (e) {}
+  }
+  // the lab: put any road surface on any sector, to compare them on the same corner
+  function fillLab() {
+    const ids = Surfaces.roadIds(), lab = Surfaces.lab;
+    $('lab').innerHTML = 'Lab' + [0, 1, 2, 3].map(k => ' <span>S' + (k + 1) + '</span><select data-k="' + k + '"><option value="">' + Surfaces.DEF[Surfaces.MAPS[world].sectors[k]].name + ' (map)</option>' +
+      ids.map(id => '<option value="' + id + '"' + (lab[k] === id ? ' selected' : '') + '>' + Surfaces.DEF[id].name + '</option>').join('') + '</select>').join('');
+    $('lab').querySelectorAll('select').forEach(s => s.onchange = () => { Surfaces.setLab(+s.dataset.k, s.value); applyWorld(world); buildTrack(Tuning.trackOpts()); Tuning.refresh(); s.blur(); });
   }
   function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
 
-  function buildTrack(opts) { Track.build(scene, opts); Phys.setTrack(); Scenery.build(scene, world, T); if (car) resetToRoad(true); }
+  function buildTrack(opts) { Track.build(scene, opts); Phys.setTrack(); Scenery.build(scene, Surfaces.MAPS[world].scenery, T); if (car) resetToRoad(true); }
   function resetToRoad(toStart) {
     const S = Track.S, i = toStart ? 6 : (car.ground ? car.ground.i : 6), m = S[i];
     Car.place(car, m.x, m.z, Math.atan2(m.hx, m.hz)); lap.cur = 0; lap.armed = false; if (toStart) lap.t0 = null;
@@ -111,18 +118,19 @@
     updateCamera(dt, ix, iy, iz, iyaw);
     sun.position.set(ix + 60, 110, iz + 35); sun.target.position.set(ix, 0, iz);
     updateLap(now); hud(now, inp, dt);
-    renderer.render(scene, camera);
+    sky.position.copy(camera.position); renderer.render(scene, camera);
   }
   let lastHud = '';
   function hud(now, inp, dt) {
     const z = car.ground ? car.ground.zone : 'A', Z = Scenery.ZONES[z];
-    const html = '<div class="zLetter">' + z + '</div><div><div class="zName">' + 'S' + ('ABCD'.indexOf(z) + 1) + ' · ' + Z.name + '</div><div class="zNote">' + Z.note + '</div></div>';
+    const sf = Surfaces.get(Surfaces.sectorId('ABCD'.indexOf(z)), T), pc = v => Math.round(v * 100) + '%';
+    const html = '<div class="zLetter">S' + ('ABCD'.indexOf(z) + 1) + '</div><div><div class="zName">' + sf.name + '</div><div class="zNote">grip ' + pc(sf.grip) + ' · drag ' + sf.drag.toFixed(2) + ' · top speed ' + pc(sf.top) + ' · brakes ' + pc(sf.brake) + (Z ? ' · scenery: ' + Z.name : '') + '</div></div>';
     if (html !== lastHud) { $('zone').innerHTML = html; lastHud = html; }
     $('speed').textContent = Math.round(Math.hypot(car.vx, car.vz) * 3.6);
     $('laps').innerHTML = 'Lap <b>' + fmt(lap.t0 === null ? null : now - lap.t0) + '</b><br>Last ' + fmt(lap.last) + '<br>Best ' + fmt(lap.best);
     // live readout so it's easy to say what the car was doing when it felt wrong
     const slideDeg = Math.round(Math.abs(car.slipR) * 57.3), lim = slideDeg > 4;
-    $('tele').innerHTML = '<b class="' + (lim ? 'm-wide' : 'm-grip') + '">' + (car.air ? 'AIR' : lim ? 'SLIDING' : 'GRIP') + '</b> · slide ' + slideDeg + '° · bank ' + Math.round((car.ground ? car.ground.b : 0) * 57.3) + '° · ' + (car.ground && car.ground.onRoad ? 'road' : world === 'desert' ? 'sand' : 'grass');
+    $('tele').innerHTML = '<b class="' + (lim ? 'm-wide' : 'm-grip') + '">' + (car.air ? 'AIR' : lim ? 'SLIDING' : 'GRIP') + '</b> · slide ' + slideDeg + '° · bank ' + Math.round((car.ground ? car.ground.b : 0) * 57.3) + '° · ' + (car.surf ? car.surf.name : '');
     if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').style.opacity = 0; }
   }
   function fillCarSelect() { $('carSel').innerHTML = carNames.map((n, i) => '<option value="' + i + '"' + (i === carIdx ? ' selected' : '') + '>' + n + '</option>').join(''); }
@@ -132,18 +140,19 @@
     await Phys.init(Car.DEF.gravity);
     await Assets.load(p => { $('loadBar').style.width = Math.round(p * 100) + '%'; });
     T = Tuning.init(opts => buildTrack(opts));
-    try { world = localStorage.getItem('r2_world') || 'desert'; } catch (e) {} if (!Scenery.ENV[world]) world = 'desert';
-    applyWorld(world); Track.build(scene, Tuning.trackOpts()); Phys.setTrack(); Scenery.build(scene, world, T);
+    try { world = localStorage.getItem('r31_map') || 'desert'; } catch (e) {} if (!Surfaces.MAPS[world]) world = 'desert';
+    applyWorld(world); Track.build(scene, Tuning.trackOpts()); Phys.setTrack(); Scenery.build(scene, Surfaces.MAPS[world].scenery, T);
     carNames = Assets.carNames(); let saved = null; try { saved = localStorage.getItem('r1_car'); } catch (e) {}
     carIdx = Math.max(0, carNames.indexOf(saved || 'race'));
     car = Car.create(scene, carNames[carIdx]); resetToRoad(true);
     fillCarSelect(); $('carSel').onchange = e => { carIdx = +e.target.value; nextCar(0); };
-    $('worldSel').innerHTML = Object.entries(Scenery.WORLDS).map(([k, n]) => '<option value="' + k + '"' + (k === world ? ' selected' : '') + '>' + n + '</option>').join('');
-    $('worldSel').onchange = e => { applyWorld(e.target.value); buildTrack(Tuning.trackOpts()); e.target.blur(); };
+    $('worldSel').innerHTML = Object.entries(Surfaces.MAPS).map(([k, m]) => '<option value="' + k + '"' + (k === world ? ' selected' : '') + '>' + m.name + '</option>').join('');
+    $('worldSel').onchange = e => { applyWorld(e.target.value); buildTrack(Tuning.trackOpts()); fillLab(); Tuning.refresh(); e.target.blur(); };
+    fillLab();
     $('loading').style.display = 'none'; $('start').style.display = 'flex';
     $('go').onclick = () => { $('start').style.display = 'none'; running = true; lap.t0 = performance.now(); $('view').focus(); };
     last = performance.now(); requestAnimationFrame(frame);
-    window.__game = { car, Track, Scenery, keys, Phys };
+    window.__game = { car, Track, Scenery, keys, Phys, get camera() { return camera; }, get scene() { return scene; } };
   }
   boot().catch(e => { $('loading').textContent = 'Could not load: ' + e.message; console.error(e); });
 })();

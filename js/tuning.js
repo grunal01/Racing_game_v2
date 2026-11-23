@@ -7,10 +7,10 @@ const Tuning = (function () {
     ['grip', 'Grip (lower = slides more)', 0.5, 20, 0.1, 'Main'], ['slideMax', 'Most sideways a slide gets (degrees)', 5, 70, 1, 'Main'], ['slideHold', 'Big slides carry further', 0, 0.9, 0.05, 'Main'],
     ['accel', 'Acceleration', 4, 40, 0.5, 'Engine and brakes'], ['brake', 'Brakes', 5, 70, 1, 'Engine and brakes'], ['reverse', 'Reverse', 2, 20, 0.5, 'Engine and brakes'],
     ['turnFall', 'Steering kept at speed (higher = sharper at speed)', 15, 300, 5, 'Steering'], ['steerSpeed', 'Steering response', 1, 15, 0.25, 'Steering'],
-    ['slideScrub', 'Speed lost while sliding', 0, 1, 0.02, 'Sliding'], ['offGrip', 'Grass grip (x)', 0.2, 1, 0.02, 'Sliding'], ['offTop', 'Grass top speed (x)', 0.2, 1, 0.02, 'Sliding'],
+    ['slideScrub', 'Speed lost while sliding', 0, 1, 0.02, 'Sliding'],
     ['suspStiff', 'Suspension stiffness', 10, 150, 1, 'Suspension'], ['suspDamp', 'Suspension damping', 0.5, 10, 0.1, 'Suspension'],
     ['suspTravel', 'Suspension travel (m)', 0.05, 0.6, 0.01, 'Suspension'], ['gravity', 'Gravity (higher = more planted)', 9, 40, 0.5, 'Suspension'],
-    ['comY', 'Weight height (lower = harder to roll)', -1, 1, 0.05, 'Suspension'], ['landing', 'Landing softness (fall speed at touchdown, m/s; lower = softer)', 1, 20, 0.5, 'Suspension'],
+    ['comY', 'Weight height (lower = harder to roll)', -1, 1, 0.05, 'Suspension'], ['landLoss', 'Speed lost on hard landings', 0, 0.08, 0.005, 'Suspension'],
     ['camDist', 'Camera distance', 4, 20, 0.25, 'Camera'], ['camHeight', 'Camera height', 1, 10, 0.1, 'Camera'], ['camLag', 'Camera follow speed', 1, 20, 0.5, 'Camera'],
     ['camLook', 'Look ahead', 0, 20, 0.5, 'Camera'], ['fov', 'Field of view', 40, 90, 1, 'Camera'], ['fovBoost', 'Extra view at speed', 0, 30, 1, 'Camera'],
     ['sceneA', 'Zone A: how much stuff (x)', 0, 3, 0.05, 'Scenery'], ['nearA', 'Zone A: closer (-) or further (+) from the road (m)', -6, 30, 0.5, 'Scenery'], ['sizeA', 'Zone A: size (x)', 0.3, 3, 0.05, 'Scenery'],
@@ -21,17 +21,21 @@ const Tuning = (function () {
   ];
   const TRACK_KEYS = ['BANK', 'HILLS', 'JUMP', 'JUMPA', 'W'].concat(...'ABCD'.split('').map(z => ['scene' + z, 'near' + z, 'size' + z]));
   let T = {}, el = null, onTrack = null, advOpen = false;
-  function defaults() { const d = Object.assign({}, Car.DEF, { BANK: Track.defaults.BANK, HILLS: Track.defaults.HILLS, JUMP: Track.defaults.JUMP, JUMPA: Track.defaults.JUMPA, W: Track.defaults.W }); for (const z of 'ABCD') Object.assign(d, { ['scene' + z]: 1, ['near' + z]: 0, ['size' + z]: 1 }); return d; }
+  function defaults() { const d = Object.assign({}, Car.DEF, { BANK: Track.defaults.BANK, HILLS: Track.defaults.HILLS, JUMP: Track.defaults.JUMP, JUMPA: Track.defaults.JUMPA, W: Track.defaults.W }, Surfaces.defaults()); for (const z of 'ABCD') Object.assign(d, { ['scene' + z]: 1, ['near' + z]: 0, ['size' + z]: 1 }); return d; }
   function load() { T = defaults(); try { Object.assign(T, JSON.parse(localStorage.getItem('r20_tune') || '{}')); } catch (e) {} return T; }
   function save() { try { localStorage.setItem('r20_tune', JSON.stringify(T)); } catch (e) {} }
   const trackOpts = () => ({ BANK: T.BANK, HILLS: T.HILLS, JUMP: T.JUMP, JUMPA: T.JUMPA, W: T.W });
   function changed() { const d = defaults(), o = {}; for (const k in T) if (Math.abs(T[k] - d[k]) > 1e-9) o[k] = T[k]; return o; }
   function render() {
     let html = '<div class="tHead"><b>Tuning</b> <span>Tab to hide</span></div>', grp = '';
-    for (const [k, label, mn, mx, st, g] of SPEC) {
-      if (g !== grp) { if (grp === 'Main') html += '<details' + (advOpen ? ' open' : '') + '><summary>Advanced</summary>'; html += '<h4>' + g + (g === 'Track' || g === 'Scenery' ? ' <small>(rebuilds when you let go)</small>' : '') + '</h4>'; grp = g; }
-      html += '<label><span>' + label + '</span><input type="range" data-k="' + k + '" min="' + mn + '" max="' + mx + '" step="' + st + '" value="' + T[k] + '"><output>' + (+T[k]).toFixed(st < 0.1 ? 2 : st < 1 ? 1 : 0) + '</output></label>';
-    }
+    const row = ([k, label, mn, mx, st]) => '<label><span>' + label + '</span><input type="range" data-k="' + k + '" min="' + mn + '" max="' + mx + '" step="' + st + '" value="' + T[k] + '"><output>' + (+T[k]).toFixed(st < 0.1 ? 2 : st < 1 ? 1 : 0) + '</output></label>';
+    const head = g => '<h4>' + g + (g === 'Track' || g === 'Scenery' ? ' <small>(rebuilds when you let go)</small>' : '') + '</h4>';
+    // main settings, then the surfaces this map is using (with which sector they're on), then everything else under Advanced
+    html += head('Main') + SPEC.filter(r => r[5] === 'Main').map(row).join('');
+    const use = Surfaces.inUse(), where = g => use.map((u, i) => u === g ? (i < 4 ? 'S' + (i + 1) : 'off-road') : null).filter(Boolean).join(', ');
+    for (const g of [...new Set(use)]) html += '<h4>' + g + ' <small>(' + where(g) + ')</small></h4>' + Surfaces.spec().filter(r => r[5] === g).map(row).join('');
+    html += '<details' + (advOpen ? ' open' : '') + '><summary>Advanced</summary>';
+    for (const r of SPEC) { if (r[5] === 'Main') continue; if (r[5] !== grp) { html += head(r[5]); grp = r[5]; } html += row(r); }
     html += '</details>';
     html += '<div class="tBtns"><button id="tCopy">Copy values</button><button id="tReset">Reset all</button></div><textarea id="tOut" readonly></textarea>';
     el.innerHTML = html;
@@ -43,12 +47,13 @@ const Tuning = (function () {
       inp.addEventListener('keydown', e => { if (e.code === 'Tab') { e.preventDefault(); toggle(); } });
     });
     el.querySelector('#tCopy').onclick = () => {
-      const txt = 'R3.0 tuning: ' + JSON.stringify(changed()), ta = el.querySelector('#tOut'); ta.value = txt; ta.style.display = 'block'; ta.select();
+      const txt = 'R3.1 tuning: ' + JSON.stringify(changed()), ta = el.querySelector('#tOut'); ta.value = txt; ta.style.display = 'block'; ta.select();
       try { navigator.clipboard.writeText(txt).catch(() => {}); } catch (e) {}
     };
     el.querySelector('#tReset').onclick = () => { T = Object.assign(T, defaults()); save(); render(); if (onTrack) onTrack(trackOpts()); };
   }
   function toggle() { el.style.display = el.style.display === 'block' ? 'none' : 'block'; if (el.style.display === 'block') render(); }
   function init(cb) { el = document.getElementById('tuning'); onTrack = cb; load(); return T; }
-  return { init, toggle, get T() { return T; }, trackOpts };
+  const refresh = () => { if (el && el.style.display === 'block') render(); };
+  return { init, toggle, refresh, get T() { return T; }, trackOpts };
 })();
