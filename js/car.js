@@ -9,8 +9,8 @@ const Car = (function () {
   const DEF = {
     topSpeed: 70, accel: 15, brake: 26, reverse: 8,
     turnRate: 2, turnFall: 100, steerSpeed: 5,
-    grip: 3.2, slideMax: 50, slideHold: 0.35, slideScrub: 0.12, offGrip: 0.6, offTop: 0.62,
-    suspStiff: 60, suspDamp: 4, suspTravel: 0.3, gravity: 20, comY: -0.4, landing: 4,
+    grip: 3.2, slideMax: 50, slideHold: 0.35, slideScrub: 0.12,
+    suspStiff: 60, suspDamp: 4, suspTravel: 0.3, gravity: 20, comY: -0.4, landLoss: 0.025,
     camDist: 9.5, camHeight: 3.6, camLag: 7, camLook: 6, fov: 62, fovBoost: 14
   };
   const MASS = 1000, REST = 0.32;
@@ -111,9 +111,14 @@ const Car = (function () {
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(tq), f3 = new THREE.Vector3(0, 0, 1).applyQuaternion(tq);
     const fl = Math.hypot(f3.x, f3.z) || 1, fx = f3.x / fl, fz = f3.z / fl;   // flat forward direction
     const g = Track.surface(c.x, c.z, c.hint); c.hint = g.i; c.ground = g;
-    const off = !g.onRoad, top = T.topSpeed * (off ? T.offTop : 1);
+    const sf = Surfaces.at(g, T); c.surf = sf;   // what's under the kart (see surfaces.js)
+    const off = !g.onRoad, top = T.topSpeed * sf.top;
     let contacts = 0; for (let i = 0; i < c.wheels.length; i++) if (v.wheelIsInContact(i)) contacts++;
-    c.air = contacts === 0; c.airT = c.air ? (c.airT || 0) + dt : 0;
+    const wasAirT = c.airT || 0;
+    c.air = contacts === 0; c.airT = c.air ? wasAirT + dt : 0;
+    if (c.air) c.airVy = rb.linvel().y;
+    // just landed after real air: for a moment the landing may not stop or spin the kart (see after Phys.step)
+    if (!c.air && wasAirT > 0.12) { c.landWin = 0.35; c.landKeep = Math.max(0.6, 1 - T.landLoss * Math.max(0, -(c.airVy || 0) - 6)); c.landPaid = false; }
     const grounded = contacts >= 1;
 
     // the wheels are only springs: no tyre forces from the physics engine (the front wheels still turn, for looks)
@@ -131,6 +136,7 @@ const Car = (function () {
     // ---- rotation: steering turns where the kart points ----
     const au = Math.abs(u);
     let yawT = -c.steer * T.turnRate * Math.min(1, au / 6) / (1 + au / T.turnFall) * (u < -0.5 ? -1 : 1);
+    yawT *= 0.35 + 0.65 * Math.min(1, sf.grip);   // the steering has less bite on slippery ground
     const w = rb.angvel(), yawNow = w.x * up.x + w.y * up.y + w.z * up.z;
     const steerAuthority = grounded ? 1 : 0.15;   // a little control in the air
     const dy = (yawT - yawNow) * Math.min(1, 14 * dt) * steerAuthority;
@@ -142,19 +148,19 @@ const Car = (function () {
       // ---- speed: the engine pushes the whole kart forward; brakes; drag ----
       let acc = 0; const vf = u;
       if (inp.throttle) acc += T.accel * 1.25 * Math.max(0, 1 - (Math.max(0, vf) / top) ** 3);
-      if (inp.brake) acc += u > 1 ? -T.brake : -T.reverse * Math.max(0, 1 - Math.max(0, -u) / 14);
+      if (inp.brake) acc += u > 1 ? -T.brake * sf.brake : -T.reverse * Math.max(0, 1 - Math.max(0, -u) / 14);
       if (!inp.throttle && !inp.brake) acc -= 0.3 * u;
-      acc -= 0.0012 * vf * Math.abs(vf) * (off ? 4 : 1);
+      acc -= 0.0012 * vf * Math.abs(vf) + sf.drag * (2 + 0.08 * Math.abs(vf)) * Math.sign(vf);   // air drag, plus the ground holding you back
       let uu = u + acc * dt;
       // ---- sliding: the direction of travel catches up with the nose at the grip rate ----
       const back = uu < 0, hd = back ? heading + Math.PI : heading;
       let tr = sp > 0.5 ? Math.atan2(lv.x, lv.z) : hd, d = angDiff(hd, tr);
       {
-        const maxS = T.slideMax * Math.PI / 180;
+        const maxS = (T.slideMax + (88 - T.slideMax) * Math.max(0, 1 - sf.grip)) * Math.PI / 180;   // slippery ground lets you slide further, almost sideways on ice
         if (Math.abs(d) > maxS) { tr = hd - Math.sign(d) * maxS; d = Math.sign(d) * maxS; }
         // the further sideways, the weaker the grip, so a big slide carries further before it hooks up again
         const hold = 1 - T.slideHold * Math.min(1, Math.abs(d) / maxS);
-        const follow = T.grip * hold * (off ? T.offGrip : 1);
+        const follow = T.grip * hold * sf.grip;
         tr += d * Math.min(1, follow * dt);
       }
       // keep the full speed through a slide (not just the forward part), minus a little scrub
@@ -168,14 +174,24 @@ const Car = (function () {
       c.lonA = acc;
     }
 
-    // soft landings (arcade): just before touchdown the fall speed is capped, so a big jump lands instead of slamming the body
-    // into the road; forward speed is untouched
-    if (c.airT > 0.05) {
-      const lvA = rb.linvel(), above = rb.translation().y - Track.surface(c.x, c.z, c.hint).y;
-      if (lvA.y < -T.landing && above < 2.5) rb.setLinvel({ x: lvA.x, y: -T.landing, z: lvA.z }, true);
-    }
+    // remember how we were moving, so a landing can keep its direction (see below)
+    if (c.airT > 0.12 || c.landWin > 0) { const la = rb.linvel(), wa = rb.angvel(); c.fly = { vx: la.x, vz: la.z, wy: wa.y }; } else c.fly = null;
     v.updateVehicle(dt);
     Phys.step();
+    // landings: the kart falls at its real speed and the springs take the hit, but if the body strikes the road it keeps its
+    // direction and most of its speed instead of being stopped and spun. The harder the landing, the more speed it costs.
+    if (c.fly) {
+      const lb = rb.linvel(), before = Math.hypot(c.fly.vx, c.fly.vz), after = Math.hypot(lb.x, lb.z);
+      if (before > 2 && after < before * 0.97) {
+        // the hard-landing cost is paid once; the rest of the window just stops the body's scrape from braking or spinning the kart
+        const keep = c.landPaid ? 1 : (c.landKeep || 1); c.landPaid = true;
+        const wb = rb.angvel();
+        rb.setLinvel({ x: c.fly.vx * keep, y: lb.y, z: c.fly.vz * keep }, true);
+        rb.setAngvel({ x: wb.x * 0.3, y: c.fly.wy, z: wb.z * 0.3 }, true);
+      }
+      c.fly = null;
+    }
+    if (c.landWin > 0) c.landWin -= dt;
     readState(c);
     const lv2 = rb.linvel(); c.vx = lv2.x; c.vz = lv2.z;
     c.speed = lv2.x * fx + lv2.z * fz;

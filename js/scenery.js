@@ -15,7 +15,8 @@ const Scenery = (function () {
     D: { name: 'Oasis camp', note: 'A palm-ringed pool with tents and a campfire beside the road; one dense landmark, sparse elsewhere' }
   };
   let group = null, seed = 1, cur = { d: 1, n: 0, s: 1 }, world = 'desert';
-  const ZONES_OF = { jungle: JUNGLE, desert: DESERT };
+  const PLAIN = n => ({ A: { name: n + ' 1', note: '' }, B: { name: n + ' 2', note: '' }, C: { name: n + ' 3', note: '' }, D: { name: n + ' 4', note: '' } });
+  const ZONES_OF = { jungle: JUNGLE, desert: DESERT, country: PLAIN('Country (scenery to come)'), tundra: PLAIN('Tundra (scenery to come)') };
   const R = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
   const pick = a => a[Math.floor(R() * a.length)];
 
@@ -197,7 +198,7 @@ const Scenery = (function () {
     if (which) world = which;
     if (group) { scene.remove(group); group.traverse(o => { if (o.isInstancedMesh) o.dispose(); }); }
     group = new THREE.Group(); seed = 12345;
-    const fns = world === 'desert' ? [dZoneA, dZoneB, dZoneC, dZoneD] : [zoneA, zoneB, zoneC, zoneD];
+    const none = () => {}, fns = world === 'desert' ? [dZoneA, dZoneB, dZoneC, dZoneD] : world === 'jungle' ? [zoneA, zoneB, zoneC, zoneD] : [none, none, none, none];
     'ABCD'.split('').forEach((z, k) => { const d = dials || {}; cur = { d: d['scene' + z] ?? 1, n: d['near' + z] ?? 0, s: d['size' + z] ?? 1 }; fns[k](); });
     cur = { d: 1, n: 0, s: 1 };
     for (const z of 'ABCD') sign(z);
@@ -208,7 +209,11 @@ const Scenery = (function () {
     jungle: { fog: 0xa9c9a4, near: 140, far: 620, top: 0x4f95d6, mid: 0xbfdcef, hemiSky: 0xd8ecff, hemiGround: 0x41592c, hemi: 1.0, sun: 0xfff0d6, sunI: 2.3,
       tunnel: 0x6b6656, ground: '#4f7a34', specks: ['rgba(40,70,25,0.35)', 'rgba(110,150,70,0.25)'], skirt: 0x4f7a34, road: '#5a5650' },
     desert: { fog: 0xe9d6b0, near: 180, far: 800, top: 0x4c8fd4, mid: 0xf2dfbd, hemiSky: 0xfff1d6, hemiGround: 0xb98f5c, hemi: 1.05, sun: 0xfff0cf, sunI: 3.0,
-      tunnel: 0xb07a50, ground: '#d8b67e', specks: ['rgba(170,130,80,0.30)', 'rgba(245,225,180,0.35)'], skirt: 0xd2ad74, road: '#86745f' }
+      tunnel: 0xb07a50, ground: '#d8b67e', specks: ['rgba(170,130,80,0.30)', 'rgba(245,225,180,0.35)'], skirt: 0xd2ad74, road: '#86745f' },
+    country: { fog: 0xc9dcea, near: 200, far: 900, top: 0x3f86d8, mid: 0xcfe3f2, hemiSky: 0xe6f2ff, hemiGround: 0x5a7a3a, hemi: 1.0, sun: 0xfff3dc, sunI: 2.6,
+      tunnel: 0x7d7a72, ground: '#5a8a3a', specks: ['rgba(50,90,30,0.35)', 'rgba(130,170,80,0.25)'], skirt: 0x5a8a3a, road: '#5a5753' },
+    tundra: { fog: 0xdfe8ef, near: 140, far: 700, top: 0x6f9cc8, mid: 0xe4edf4, hemiSky: 0xf2f7ff, hemiGround: 0x9aa8b4, hemi: 1.1, sun: 0xeaf2ff, sunI: 2.2,
+      tunnel: 0x8a96a2, ground: '#eef3f6', specks: ['rgba(180,200,215,0.35)', 'rgba(255,255,255,0.5)'], skirt: 0xeef3f6, road: '#e3eaef' }
   };
   return { build, get ZONES() { return ZONES_OF[world]; }, get world() { return world; }, ENV, WORLDS: { jungle: 'Jungle', desert: 'Desert' } };
 })();
