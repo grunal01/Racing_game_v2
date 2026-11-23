@@ -182,10 +182,10 @@ const Car = (function () {
     // remember how we were moving, so a landing can keep its direction (see below)
     if (c.airT > 0.12 || c.landWin > 0) { const la = rb.linvel(), wa = rb.angvel(); c.fly = { vx: la.x, vz: la.z, wy: wa.y }; } else c.fly = null;
     v.updateVehicle(dt, undefined, (Obstacles.CAR << 16) | (0xffff & ~Obstacles.DEBRIS));   // the wheels don't land on debris
-    const vPre = rb.linvel(), wPre = rb.angvel();
+    const vPre = rb.linvel(), wPre = rb.angvel(), qPre = rb.rotation();
     Phys.step();
     // walls, rocks, trees: glancing vs head-on, and breakable walls (obstacles.js). A hit there isn't a landing.
-    if (Obstacles.afterStep(c, T, vPre, wPre)) c.fly = null;
+    if (Obstacles.afterStep(c, T, vPre, wPre, qPre)) c.fly = null;
     // landings: the kart falls at its real speed and the springs take the hit, but if the body strikes the road it keeps its
     // direction and most of its speed instead of being stopped and spun. The harder the landing, the more speed it costs.
     if (c.fly) {

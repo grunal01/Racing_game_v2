@@ -121,7 +121,7 @@ const Obstacles = (function () {
   }
 
   // called by the car after each physics step: vPre / wPre = the kart's velocity just before the step
-  function afterStep(c, T, vPre, wPre) {
+  function afterStep(c, T, vPre, wPre, qPre) {
     if (!c.col) return false;
     const rb = c.rb, now = new Set(); let hitInfo = null;
     W().contactPairsWith(c.col, other => {
@@ -137,7 +137,7 @@ const Obstacles = (function () {
       const first = !lastHit.has(it), sp = Math.hypot(vPre.x, vPre.z) || 1, f = Math.min(1, into / sp);
       if (it.kind === 'break' && first && into * 3.6 >= T.breakKmh) {
         const pp = rb.translation(); burst(it, vPre.x, vPre.z, pp.x, pp.z);
-        const keep = 1 - T.breakLoss; rb.setLinvel({ x: vPre.x * keep, y: rb.linvel().y, z: vPre.z * keep }, true); rb.setAngvel(wPre, true);
+        const keep = 1 - T.breakLoss; rb.setLinvel({ x: vPre.x * keep, y: rb.linvel().y, z: vPre.z * keep }, true); rb.setAngvel(wPre, true); if (qPre) rb.setRotation(qPre, true);   // smashing through doesn't twist the kart
         hitInfo = { kmh: into * 3.6, it, broke: true }; return;
       }
       // remove the speed into the object; keep the speed along it (less of it the more head-on); bounce a little on first touch
