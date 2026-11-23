@@ -116,7 +116,7 @@ const Car = (function () {
     // what's under the kart (see surfaces.js). Its numbers ease over ~0.25 s so crossing from sand to road isn't a jolt
     const sfT = Surfaces.at(g, T), sf = c.sfs || (c.sfs = Object.assign({}, sfT)), ease = Math.min(1, dt * 4);
     for (const p of ['grip', 'drag', 'top', 'brake']) sf[p] += (sfT[p] - sf[p]) * ease;
-    sf.name = sfT.name; sf.id = sfT.id; sf.color = sfT.color; c.surf = sf;
+    sf.name = sfT.name; sf.id = sfT.id; sf.color = sfT.color; sf.spray = sfT.spray; c.surf = sf;
     const off = !g.onRoad, top = T.topSpeed * sf.top;
     let contacts = 0; for (let i = 0; i < c.wheels.length; i++) if (v.wheelIsInContact(i)) contacts++;
     const wasAirT = c.airT || 0;

@@ -1,7 +1,7 @@
 // ===== Obstacles: the things to hit in the obstacle alley (the wide part of the start straight) =====
 // Solid objects: a wall at a shallow angle (glancing hits), a wall at a steep angle, a rock to hit head-on, and a tree.
-// Breakable walls: all or nothing. Hit one faster than "break speed" (only the speed INTO the wall counts) and it bursts
-// into flying blocks; slower and it acts as a solid wall.
+// Breakable rocks: all or nothing. Hit one faster than "break speed" (only the speed INTO the rock counts) and it bursts
+// into a spray of smaller rocks (a few big, many small); slower and it's solid.
 // How a hit feels (arcade, applied after the physics step): the kart's speed is split into the part going into the object
 // and the part going along it. The "into" part is removed, plus a small bounce back on the first touch; the "along" part
 // loses a little (more the more head-on the hit was). So a glancing hit scrapes along, a head-on hit crunches to a stop.
@@ -13,9 +13,9 @@ const Obstacles = (function () {
     { kind: 'wall', s: 102, u: -7, a: 55, len: 9, h: 2.2, t: 0.8, label: 'steep wall' },
     { kind: 'rock', s: 127, u: 5, size: 3.4, label: 'rock' },
     { kind: 'tree', s: 148, u: -6, size: 9, label: 'tree' },
-    { kind: 'break', s: 176, u: -8, len: 14, h: 4, t: 1.6, label: 'breakable wall' },
-    { kind: 'break', s: 198, u: 6, len: 14, h: 4, t: 1.6, label: 'breakable wall' },
-    { kind: 'break', s: 220, u: -1, len: 14, h: 4, t: 1.6, label: 'breakable wall' }
+    { kind: 'break', s: 178, u: -8, size: 4.5, model: 'rock_largeD', label: 'breakable rock' },
+    { kind: 'break', s: 200, u: 6, size: 7, model: 'rock_tallB', label: 'breakable rock' },
+    { kind: 'break', s: 222, u: -1, size: 4, model: 'rock_largeC', label: 'breakable rock' }
   ];
   // per map: wall colour, block colours, rock tint, tree model and tint
   const LOOK = {
@@ -28,7 +28,8 @@ const Obstacles = (function () {
   let scene = null, group = null, items = [], debris = [], byHandle = new Map(), showBoxes = false, boxGroup = null, lastHit = new Set(), map = 'desert', onHit = null;
   const W = () => Phys.world;
 
-  function tinted(mat, tint) { if (tint == null) return mat; const c = mat.color, l = 0.3 * c.r + 0.59 * c.g + 0.11 * c.b, m = mat.clone(); m.color = new THREE.Color(tint).multiplyScalar(0.55 + 0.9 * l); return m; }
+  const tintCache = {};
+  function tinted(mat, tint) { if (tint == null) return mat; const key = mat.uuid + tint; if (tintCache[key]) return tintCache[key]; const c = mat.color, l = 0.3 * c.r + 0.59 * c.g + 0.11 * c.b, m = mat.clone(); m.color = new THREE.Color(tint).multiplyScalar(0.55 + 0.9 * l); return (tintCache[key] = m); }
   function frame(o) {   // world position and yaw for a layout entry
     const m = Track.S[Math.round(o.s)], x = m.x + m.ox * o.u, z = m.z + m.oz * o.u, yaw = Math.atan2(m.hx, m.hz) + (o.a || 0) * Math.PI / 180;
     return { x, z, y: Track.roadY(m, o.u), yaw, q: new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw) };
@@ -71,11 +72,8 @@ const Obstacles = (function () {
         const md = model(L.tree, o.size, L.treeTint, 3);   // the hitbox is the trunk (the part the kart can reach)
         addFixed(o, RAPIER.ColliderDesc.convexHull(md.pts), [md.g]);
       } else if (o.kind === 'break') {
-        // one solid-looking wall while it stands; it only becomes pieces when it breaks (see burst)
-        const mesh = new THREE.Mesh(new THREE.BoxGeometry(o.t, o.h, o.len), new THREE.MeshLambertMaterial({ color: L.block[0] })); mesh.geometry.translate(0, o.h / 2, 0); mesh.castShadow = mesh.receiveShadow = true;
-        const cap = new THREE.Mesh(new THREE.BoxGeometry(o.t + 0.2, 0.25, o.len + 0.2), new THREE.MeshLambertMaterial({ color: new THREE.Color(L.block[0]).multiplyScalar(0.8) })); cap.geometry.translate(0, o.h + 0.12, 0); cap.castShadow = true;
-        const o2 = Object.assign({}, o, { a: 90, colors: L.block });   // across the road
-        addFixed(o2, RAPIER.ColliderDesc.cuboid(o.t / 2, o.h / 2, o.len / 2).setTranslation(0, o.h / 2, 0), [mesh, cap]);
+        // a big boulder; its hitbox is the rock's own shape
+        const md = model(o.model, o.size, L.rock); addFixed(Object.assign({}, o, { tint: L.rock }), RAPIER.ColliderDesc.convexHull(md.pts), [md.g]);
       }
     }
     if (showBoxes) drawBoxes();
@@ -89,31 +87,36 @@ const Obstacles = (function () {
   }
   const reset = () => { if (scene) build(scene, map); };
 
-  // break a wall: it shatters into uneven chunks that fly off, fastest near where the kart hit
+  // break a rock: it bursts into smaller rocks - a few big chunks, more medium, lots of small - scattered through its volume
+  // and thrown out from the impact, fastest nearest the hit
+  const SMALL = ['rock_smallA', 'rock_smallB', 'rock_smallC', 'rock_smallD', 'rock_smallE', 'rock_smallF', 'rock_smallG', 'rock_smallH', 'rock_smallI'];
+  const CHUNK = ['rock_largeA', 'rock_largeB', 'rock_largeE', 'rock_largeF', 'rock_tallA', 'rock_tallD'];
+  const pick = a => a[Math.floor(Math.random() * a.length)];
   function burst(it, vx, vz, px, pz) {
     W().removeRigidBody(it.body); it.body = null; it.broken = true; byHandle.delete(it.col.handle);
+    for (const mm of it.meshes) { mm.updateMatrixWorld(true); }
+    const box = new THREE.Box3().setFromObject(it.meshes[0]), size = box.getSize(new THREE.Vector3()), mid = box.getCenter(new THREE.Vector3());
     for (const mm of it.meshes) mm.visible = false;
-    const f = it.f, q = f.q, sp = Math.hypot(vx, vz) || 1, cols = it.colors;
-    // cut the wall into columns and rows of random sizes, two layers thick
-    const xs = [], ys = []; for (let a = 0; a < it.len - 0.01;) { const w = Math.min(it.len - a, 0.7 + Math.random() * 1.1); xs.push([a, w]); a += w; }
-    for (let a = 0; a < it.h - 0.01;) { const w = Math.min(it.h - a, 0.6 + Math.random() * 0.8); ys.push([a, w]); a += w; }
-    const right = new THREE.Vector3(0, 0, 1).applyQuaternion(q), fwd = new THREE.Vector3(1, 0, 0).applyQuaternion(q), pq = new THREE.Quaternion(), e = new THREE.Euler();
-    for (const [x0, w] of xs) for (const [y0, hh] of ys) for (const layer of [-1, 1]) {
-      const d = it.t / 2, along = -it.len / 2 + x0 + w / 2, c = new THREE.Vector3(f.x, f.y + y0 + hh / 2, f.z).addScaledVector(right, along).addScaledVector(fwd, layer * d / 2);
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(d * (0.85 + Math.random() * 0.15), hh * (0.85 + Math.random() * 0.15), w * (0.85 + Math.random() * 0.15)), new THREE.MeshLambertMaterial({ color: cols[Math.floor(Math.random() * cols.length)] }));
-      e.set((Math.random() - 0.5) * 0.25, (Math.random() - 0.5) * 0.25, (Math.random() - 0.5) * 0.25); pq.setFromEuler(e).premultiply(q);
-      mesh.position.copy(c); mesh.quaternion.copy(pq); mesh.castShadow = true; group.add(mesh);
-      // closer to the hit = faster; everything carries some of the kart's speed and gets thrown up and outward
-      const dx = c.x - px, dz = c.z - pz, dist = Math.hypot(dx, dz) || 1, punch = Math.max(0.15, 1 - dist / 9);
-      const out = 2 + 7 * punch, k = 0.25 + 0.6 * punch * Math.random();
-      const body = W().createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(c.x, c.y, c.z).setRotation(rq(pq)).setLinearDamping(0.05).setAngularDamping(0.2)
-        .setLinvel(vx * k + dx / dist * out * Math.random(), 1.5 + (5 + 4 * punch) * Math.random() * (0.4 + 0.6 * c.y / (f.y + it.h)), vz * k + dz / dist * out * Math.random())
-        .setAngvel({ x: (Math.random() - 0.5) * 10 * punch, y: (Math.random() - 0.5) * 10 * punch, z: (Math.random() - 0.5) * 10 * punch }));
-      const sz = mesh.geometry.parameters;
-      W().createCollider(RAPIER.ColliderDesc.cuboid(sz.width / 2, sz.height / 2, sz.depth / 2).setDensity(600).setFriction(0.8).setRestitution(0.2).setCollisionGroups((DEBRIS << 16) | (0xffff & ~CAR)), body);
-      debris.push({ body, mesh });
+    const H = size.y, q = new THREE.Quaternion(), e = new THREE.Euler();
+    let budget = size.x * size.y * size.z * 0.4, n = 0;
+    while (budget > 0 && n < 80) {
+      // size: the first few are big chunks, the rest mostly small (sizes skewed small)
+      const big = n < 2, sz = big ? (0.2 + Math.random() * 0.1) * H : Math.max(0.2, (0.04 + 0.22 * Math.random() ** 2) * H);
+      const md = model(big || sz > 1.4 ? pick(CHUNK) : pick(SMALL), sz, it.tint);
+      const hull = RAPIER.ColliderDesc.convexHull(md.pts); if (!hull) { n++; continue; }
+      const x = mid.x + (Math.random() - 0.5) * size.x * 0.75, y = box.min.y + Math.random() * H * 0.75, z = mid.z + (Math.random() - 0.5) * size.z * 0.75;
+      e.set(Math.random() * 6.28, Math.random() * 6.28, Math.random() * 6.28); q.setFromEuler(e);
+      md.g.position.set(x, y, z); md.g.quaternion.copy(q); group.add(md.g);
+      const dx = x - px, dz = z - pz, dist = Math.hypot(dx, dz) || 1, punch = Math.max(0.15, 1 - dist / (Math.max(size.x, size.z) * 0.9)), light = 1 / (1 + sz * 0.4);
+      const out = (2 + 8 * punch) * light, k = (0.2 + 0.6 * punch * Math.random()) * light;
+      const body = W().createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(x, y, z).setRotation(rq(q)).setLinearDamping(0.05).setAngularDamping(0.25)
+        .setLinvel(vx * k + dx / dist * out * Math.random(), (1.5 + (4 + 5 * punch) * Math.random()) * light, vz * k + dz / dist * out * Math.random())
+        .setAngvel({ x: (Math.random() - 0.5) * 12 * light, y: (Math.random() - 0.5) * 12 * light, z: (Math.random() - 0.5) * 12 * light }));
+      W().createCollider(hull.setDensity(1200).setFriction(0.9).setRestitution(0.15).setCollisionGroups((DEBRIS << 16) | (0xffff & ~CAR)), body);
+      debris.push({ body, mesh: md.g });
+      budget -= sz * sz * sz * 0.6; n++;
     }
-    if (window.Effects) Effects.dustBurst(px, f.y + 1, pz, cols[0], vx, vz);
+    if (window.Effects) Effects.dustBurst(px, box.min.y + 1.2, pz, it.tint || 0x999999, vx, vz);
     if (showBoxes) drawBoxes();
   }
 
