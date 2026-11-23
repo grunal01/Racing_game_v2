@@ -10,6 +10,8 @@
     if (!running || e.repeat) return;
     if (e.code === 'Tab') Tuning.toggle();
     if (e.code === 'KeyR') resetToRoad();
+    if (e.code === 'KeyH') toast(Obstacles.toggleBoxes() ? 'Hitboxes on' : 'Hitboxes off');
+    if (e.code === 'KeyO') { Obstacles.reset(); toast('Obstacles reset'); }
     if (e.code === 'KeyC') nextCar(e.shiftKey ? -1 : 1);
   });
   addEventListener('keyup', e => { keys[e.code] = false; });
@@ -60,7 +62,7 @@
   }
   function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
 
-  function buildTrack(opts) { Track.build(scene, opts); Phys.setTrack(); Scenery.build(scene, Surfaces.MAPS[world].scenery, T); if (car) resetToRoad(true); }
+  function buildTrack(opts) { Track.build(scene, opts); Phys.setTrack(); Scenery.build(scene, Surfaces.MAPS[world].scenery, T); Obstacles.build(scene, world); if (car) resetToRoad(true); }
   function resetToRoad(toStart) {
     const S = Track.S, i = toStart ? 6 : (car.ground ? car.ground.i : 6), m = S[i];
     Car.place(car, m.x, m.z, Math.atan2(m.hx, m.hz)); lap.cur = 0; lap.armed = false; if (toStart) lap.t0 = null;
@@ -74,7 +76,7 @@
     if (i > N * 0.45 && i < N * 0.55) lap.armed = true;                 // you have to get halfway round before the line counts
     if (lap.prevI > N - 40 && i < 40 && car.speed > 0) {                // crossed the start line going forwards
       if (lap.t0 !== null && lap.armed) { lap.last = now - lap.t0; if (!lap.best || lap.last < lap.best) { lap.best = lap.last; toast('Best lap ' + fmt(lap.best)); } lap.n++; }
-      lap.t0 = now; lap.armed = false;
+      lap.t0 = now; lap.armed = false; Obstacles.reset();   // walls rebuild every lap
     }
     lap.prevI = i;
   }
@@ -113,7 +115,7 @@
     let n = 0;
     while (acc >= STEP && n < 12) { Car.savePrev(car); Car.step(car, T, inp, STEP); acc -= STEP; n++; }
     if (n >= 12) acc = 0;
-    Car.draw(car, dt, acc / STEP);
+    Car.draw(car, dt, acc / STEP); Obstacles.draw(car);
     const ix = car.ix, iy = car.iy, iz = car.iz, iyaw = car.iyaw;
     updateCamera(dt, ix, iy, iz, iyaw);
     sun.position.set(ix + 60, 110, iz + 35); sun.target.position.set(ix, 0, iz);
@@ -141,7 +143,8 @@
     await Assets.load(p => { $('loadBar').style.width = Math.round(p * 100) + '%'; });
     T = Tuning.init(opts => buildTrack(opts));
     try { world = localStorage.getItem('r31_map') || 'desert'; } catch (e) {} if (!Surfaces.MAPS[world]) world = 'desert';
-    applyWorld(world); Track.build(scene, Tuning.trackOpts()); Phys.setTrack(); Scenery.build(scene, Surfaces.MAPS[world].scenery, T);
+    applyWorld(world); Track.build(scene, Tuning.trackOpts()); Phys.setTrack(); Scenery.build(scene, Surfaces.MAPS[world].scenery, T); Obstacles.build(scene, world);
+    Obstacles.onHit = (h, TT) => toast(h.broke ? 'Smashed through at ' + Math.round(h.kmh) + ' km/h' : h.it.kind === 'break' ? 'Wall held: ' + Math.round(h.kmh) + ' km/h into it (needs ' + TT.breakKmh + ')' : (h.glancing ? 'Glancing hit: ' : 'Head-on: ') + Math.round(h.kmh) + ' km/h into the ' + h.it.label);
     carNames = Assets.carNames(); let saved = null; try { saved = localStorage.getItem('r1_car'); } catch (e) {}
     carIdx = Math.max(0, carNames.indexOf(saved || 'race'));
     car = Car.create(scene, carNames[carIdx]); resetToRoad(true);

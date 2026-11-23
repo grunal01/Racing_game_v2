@@ -11,6 +11,7 @@ const Car = (function () {
     turnRate: 2, turnFall: 100, steerSpeed: 5,
     grip: 3.2, slideMax: 50, slideHold: 0.35, slideScrub: 0.12,
     suspStiff: 60, suspDamp: 4, suspTravel: 0.3, gravity: 20, comY: -0.4, landLoss: 0.025,
+    breakKmh: 120, breakLoss: 0.15, bounce: 0.15, scrape: 0.35,
     camDist: 9.5, camHeight: 3.6, camLag: 7, camLook: 6, fov: 62, fovBoost: 14
   };
   const MASS = 1000, REST = 0.32;
@@ -64,7 +65,8 @@ const Car = (function () {
       .setAdditionalMassProperties(MASS, { x: 0, y: (lastTune || DEF).comY, z: 0 }, { x: Ix, y: Iy, z: Iz }, { x: 0, y: 0, z: 0, w: 1 }).setAngularDamping(0.4);
     c.rb = W.createRigidBody(desc);
     // the body sits clear above the wheels and slides if it ever touches, so a squashed suspension never acts as a brake
-    W.createCollider(RAPIER.ColliderDesc.cuboid(d.hx * 0.92, hy, d.hz * 0.95).setTranslation(0, wheelTop + hy + 0.12, 0).setDensity(0).setFriction(0).setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min), c.rb);
+    // the body box (what hits walls and rocks). Its collision group keeps it from hitting flying debris (see obstacles.js)
+    c.col = W.createCollider(RAPIER.ColliderDesc.cuboid(d.hx * 0.92, hy, d.hz * 0.95).setTranslation(0, wheelTop + hy + 0.12, 0).setDensity(0).setFriction(0).setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min).setCollisionGroups((Obstacles.CAR << 16) | 0xffff), c.rb);
     const veh = W.createVehicleController(c.rb);
     veh.indexUpAxis = 1; veh.setIndexForwardAxis = 2;
     for (const w of c.wheels) veh.addWheel({ x: w.at.x, y: w.at.y + REST, z: w.at.z }, { x: 0, y: -1, z: 0 }, { x: -1, y: 0, z: 0 }, REST, w.r);
@@ -176,8 +178,11 @@ const Car = (function () {
 
     // remember how we were moving, so a landing can keep its direction (see below)
     if (c.airT > 0.12 || c.landWin > 0) { const la = rb.linvel(), wa = rb.angvel(); c.fly = { vx: la.x, vz: la.z, wy: wa.y }; } else c.fly = null;
-    v.updateVehicle(dt);
+    v.updateVehicle(dt, undefined, (Obstacles.CAR << 16) | (0xffff & ~Obstacles.DEBRIS));   // the wheels don't land on debris
+    const vPre = rb.linvel(), wPre = rb.angvel();
     Phys.step();
+    // walls, rocks, trees: glancing vs head-on, and breakable walls (obstacles.js). A hit there isn't a landing.
+    if (Obstacles.afterStep(c, T, vPre, wPre)) c.fly = null;
     // landings: the kart falls at its real speed and the springs take the hit, but if the body strikes the road it keeps its
     // direction and most of its speed instead of being stopped and spun. The harder the landing, the more speed it costs.
     if (c.fly) {
