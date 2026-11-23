@@ -50,7 +50,7 @@
     for (let k = 0; k < 3000; k++) { g.fillStyle = Math.random() < 0.5 ? E.specks[0] : E.specks[1]; g.fillRect(Math.random() * 256, Math.random() * 256, 3, 3); }
     const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(200, 200); t.colorSpace = THREE.SRGBColorSpace;
     if (ground.material.map) ground.material.map.dispose(); ground.material.map = t; ground.material.needsUpdate = true;
-    Track.setLook({ road: E.road, skirt: E.skirt, groundMat: ground.material, tunnel: E.tunnel, sectorColors: [0, 1, 2, 3].map(k => Surfaces.DEF[Surfaces.sectorId(k)].color) });
+    Track.setLook({ road: E.road, skirt: E.skirt, groundMat: ground.material, tunnel: E.tunnel, sectorColors: [0, 1, 2, 3].map(k => Surfaces.DEF[Surfaces.sectorId(k)].color), layers: Surfaces.layerInfo(Tuning.T) });
     try { localStorage.setItem('r31_map', w); } catch (e) {}
   }
   // the lab: put any road surface on any sector, to compare them on the same corner
@@ -115,7 +115,7 @@
     let n = 0;
     while (acc >= STEP && n < 12) { Car.savePrev(car); Car.step(car, T, inp, STEP); acc -= STEP; n++; }
     if (n >= 12) acc = 0;
-    Car.draw(car, dt, acc / STEP); Obstacles.draw(car); Effects.update(car, dt);
+    Car.draw(car, dt, acc / STEP); Obstacles.draw(car); Effects.update(car, dt); Track.tick(dt);
     const ix = car.ix, iy = car.iy, iz = car.iz, iyaw = car.iyaw;
     updateCamera(dt, ix, iy, iz, iyaw);
     sun.position.set(ix + 60, 110, iz + 35); sun.target.position.set(ix, 0, iz);
@@ -141,7 +141,7 @@
     setupScene();
     await Phys.init(Car.DEF.gravity);
     await Assets.load(p => { $('loadBar').style.width = Math.round(p * 100) + '%'; });
-    T = Tuning.init(opts => buildTrack(opts));
+    T = Tuning.init(opts => { applyWorld(world); buildTrack(opts); });   // track sliders and surface depth/bumps rebuild the track
     try { world = localStorage.getItem('r31_map') || 'desert'; } catch (e) {} if (!Surfaces.MAPS[world]) world = 'desert';
     applyWorld(world); Track.build(scene, Tuning.trackOpts()); Phys.setTrack(); Scenery.build(scene, Surfaces.MAPS[world].scenery, T); Obstacles.build(scene, world); Effects.init(scene);
     Obstacles.onHit = (h, TT) => toast(h.broke ? 'Smashed through at ' + Math.round(h.kmh) + ' km/h' : h.it.kind === 'break' ? 'Rock held: ' + Math.round(h.kmh) + ' km/h into it (needs ' + TT.breakKmh + ')' : (h.glancing ? 'Glancing hit: ' : 'Head-on: ') + Math.round(h.kmh) + ' km/h into the ' + h.it.label);
