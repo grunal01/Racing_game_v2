@@ -93,6 +93,7 @@ const Effects = (function () {
     const fam = FAMILY[sf.id] || 'dust', loose = LOOSE[fam], speed = Math.hypot(car.vx, car.vz), slide = Math.abs(Math.sin(car.slipR || 0)) * speed;
     const rear = car.wheels.filter(w => !w.front).slice(0, 2), fx = Math.sin(car.iyaw), fz = Math.cos(car.iyaw);
     const sliding = slide > 4, marking = !car.air && (loose ? speed > 2 : sliding);
+    if (!car.air && speed > 3 && (fam === 'water' || fam === 'snow' || fam === 'slush')) pushAside(car, dt, fam, sf, speed);
     rear.forEach((w, i) => {
       wp.copy(w.at).applyQuaternion(car.mesh.quaternion).add(car.mesh.position);
       const gs = Track.surface(wp.x, wp.z, car.hint), gy = gs.y, top = gs.top == null ? gy : gs.top, tr = tracks[i];   // ground, and the top of any water/snow/mud layer
@@ -122,6 +123,33 @@ const Effects = (function () {
         }
       }
     });
+  }
+  // water and snow get pushed aside: a bow wave off each front wheel thrown outward, and foam / ploughed snow that keeps
+  // spreading sideways behind the kart (a V wake)
+  const wq = new THREE.Vector3();
+  function pushAside(car, dt, fam, sf, speed) {
+    const fx = Math.sin(car.iyaw), fz = Math.cos(car.iyaw), lx = fz, lz = -fx;   // forward, and left
+    for (const w of car.wheels.filter(w => w.front)) {
+      wq.copy(w.at).applyQuaternion(car.mesh.quaternion).add(car.mesh.position);
+      const gs = Track.surface(wq.x, wq.z, car.hint), top = gs.top == null ? gs.y : gs.top, depth = gs.depth || 0;
+      if (depth < 0.05 && fam !== 'water') continue;
+      const side = (w.at.x > 0 ? 1 : -1), k = Math.min(1, depth / 0.4) * (sf.spray == null ? 1 : sf.spray);   // left wheel pushes left, right wheel right
+      const out = 2 + speed * 0.12, n0 = speed * (fam === 'water' ? 3.2 : 2.8) * k * dt;
+      for (let n = n0; n > 0; n -= 1) {
+        if (n < 1 && Math.random() > n) break;
+        const r = Math.random();
+        if (fam === 'water') {
+          // bow wave: a sheet of spray thrown out to the side and a little up
+          emit(wq.x + lx * side * 0.4, top + 0.1, wq.z + lz * side * 0.4, lx * side * out * (0.6 + r * 0.6) + fx * speed * 0.35, 1.4 + r * 2.4, lz * side * out * (0.6 + r * 0.6) + fz * speed * 0.35, 0.7, 0.6, 1.4, 9, 0.6, 0xffffff, 0.85);
+          // wake: foam that lies on the water and keeps moving outward
+          emit(wq.x, top + 0.06, wq.z, lx * side * out * 0.5, 0, lz * side * out * 0.5, 2.4, 0.9, 2.6, 0, 0.35, 0xffffff, 0.7);
+        } else {
+          // snow: ploughed clumps shoved aside and rolled out low, plus a little powder
+          emit(wq.x + lx * side * 0.4, top + 0.15, wq.z + lz * side * 0.4, lx * side * out * (0.5 + r * 0.7) + fx * speed * 0.3, 0.8 + r * 1.6, lz * side * out * (0.5 + r * 0.7) + fz * speed * 0.3, 0.8, 0.45, 0.4, 10, 0.8, 0xffffff, 0.95);
+          if (r < 0.4) emit(wq.x, top + 0.3, wq.z, lx * side * out * 0.4, 0.6, lz * side * out * 0.4, 1.3, 0.8, 2.4, 0.3, 1.4, 0xf4f8fb, 0.4);
+        }
+      }
+    }
   }
   // a cloud of dust when a wall breaks
   function dustBurst(x, y, z, color, vx, vz) {

@@ -212,7 +212,7 @@ const Scenery = (function () {
       tunnel: 0xb07a50, ground: '#d8b67e', specks: ['rgba(170,130,80,0.30)', 'rgba(245,225,180,0.35)'], skirt: 0xd2ad74, road: '#86745f' },
     country: { fog: 0xc9dcea, near: 200, far: 900, top: 0x3f86d8, mid: 0xcfe3f2, hemiSky: 0xe6f2ff, hemiGround: 0x5a7a3a, hemi: 1.0, sun: 0xfff3dc, sunI: 2.6,
       tunnel: 0x7d7a72, ground: '#5a8a3a', specks: ['rgba(50,90,30,0.35)', 'rgba(130,170,80,0.25)'], skirt: 0x5a8a3a, road: '#5a5753' },
-    tundra: { fog: 0xdfe8ef, near: 140, far: 700, top: 0x6f9cc8, mid: 0xe4edf4, hemiSky: 0xf2f7ff, hemiGround: 0x9aa8b4, hemi: 1.1, sun: 0xeaf2ff, sunI: 2.2,
+    tundra: { snowpack: 2, fog: 0xdfe8ef, near: 140, far: 700, top: 0x6f9cc8, mid: 0xe4edf4, hemiSky: 0xf2f7ff, hemiGround: 0x9aa8b4, hemi: 1.1, sun: 0xeaf2ff, sunI: 2.2,
       tunnel: 0x8a96a2, ground: '#eef3f6', specks: ['rgba(180,200,215,0.35)', 'rgba(255,255,255,0.5)'], skirt: 0xeef3f6, road: '#e3eaef' }
   };
   return { build, get ZONES() { return ZONES_OF[world]; }, get world() { return world; }, ENV, WORLDS: { jungle: 'Jungle', desert: 'Desert' } };
