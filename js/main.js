@@ -50,7 +50,7 @@
     for (let k = 0; k < 3000; k++) { g.fillStyle = Math.random() < 0.5 ? E.specks[0] : E.specks[1]; g.fillRect(Math.random() * 256, Math.random() * 256, 3, 3); }
     const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(200, 200); t.colorSpace = THREE.SRGBColorSpace;
     if (ground.material.map) ground.material.map.dispose(); ground.material.map = t; ground.material.needsUpdate = true;
-    Track.setLook({ road: E.road, skirt: E.skirt, groundMat: ground.material, tunnel: E.tunnel, sectorColors: [0, 1, 2, 3].map(k => Surfaces.DEF[Surfaces.sectorId(k)].color), layers: Surfaces.layerInfo(Tuning.T) });
+    Track.setLook({ snowpack: E.snowpack || 0, road: E.road, skirt: E.skirt, groundMat: ground.material, tunnel: E.tunnel, sectorColors: [0, 1, 2, 3].map(k => Surfaces.DEF[Surfaces.sectorId(k)].color), layers: Surfaces.layerInfo(Tuning.T) });
     try { localStorage.setItem('r31_map', w); } catch (e) {}
   }
   // the lab: put any road surface on any sector, to compare them on the same corner

@@ -95,9 +95,9 @@ const Track = (function () {
   const lumps = (s, u) => 0.5 * Math.sin(0.9 * s + 1.7 * Math.sin(0.21 * u)) + 0.3 * Math.sin(0.37 * s + 0.8 * u) + 0.2 * Math.sin(1.9 * s - 0.5 * u);
   const edgeTaper = (m, u) => 1 - sstep(m.half * 0.55, m.E, Math.abs(u));
   // the solid ground the wheels touch: the road's top, minus the sector's depth, plus its bumps (both fade out at the kerbs)
-  const bedY = (m, u) => roadY(m, u) - ((m.sink || 0) - (m.bump || 0) * lumps(m.s, u)) * edgeTaper(m, u);
+  const bedY = (m, u) => roadY(m, u) - ((m.sink || 0) - (m.bump || 0) * (m.layer === 'gravel' ? lumps(2.4 * m.s, 2 * u) : lumps(m.s, u))) * edgeTaper(m, u);   // gravel: a finer washboard
   // the visible top of a water / snow / mud layer (snow adds drifts on top)
-  const layerTop = (m, u) => roadY(m, u) + (m.layer === 'snow' ? (m.sink || 0) * (0.6 * Math.max(0, Math.sin(0.3 * m.s + 0.2 * u)) ** 2 * edgeTaper(m, u) + 1.6 * sstep(m.half - 2.2, m.half + 0.2, Math.abs(u))) : 0);   // drifts across, banks along the edges
+  const layerTop = (m, u) => m.layer === 'gravel' ? bedY(m, u) + 0.015 : roadY(m, u);   // water, snow, mud: a flat top at road level; gravel: a skin on the bumpy ground
   const EDGE = i => (i === undefined ? P.W / 2 + P.KERB : S[i].E);
 
   // ---------- terrain: a grid that hugs the road and rolls gently further out ----------
@@ -119,25 +119,27 @@ const Track = (function () {
         if (d < best[k]) { best[k] = d; who[k] = m.i; }
       }
     }
-    const H = new Float32Array(n);
+    const H = new Float32Array(n), C = new Float32Array(n), SP = look.snowpack || 0, SINK = Math.min(0.5, SP);
     for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
       const k = j * nx + i, x = x0 + i * CELL, z = z0 + j * CELL;
       const edgeFade = Math.min(1, Math.min(i, j, nx - 1 - i, nz - 1 - j) / 15);   // flatten out at the far edges of the grid
-      let nat = noise(x, z) * edgeFade, h = nat;
+      let nat = noise(x, z) * edgeFade, h = nat, pack = SP, packIn = 1;
       if (who[k] >= 0) {
         const m = S[who[k]], u = (x - m.x) * m.ox + (z - m.z) * m.oz, au = Math.abs(u), E = m.E;
         nat = m.h * (1 - sstep(E, 65, au)) + noise(x, z) * sstep(E + 10, 60, au) * edgeFade;
         if (au <= E) h = roadY(m, u) - 0.6 - (m.sink || 0) - (m.bump || 0);   // under the road, kept well below it (and below any dip)
         else { const ey = roadY(m, Math.sign(u) * E) - 0.22; h = lerp(ey, nat, sstep(E + 2, E + 34, au)); }   // beside it: level with the edge, then easing out
+        pack = SP * sstep(E, E + 5, au); packIn = sstep(E + 5, E + 9, au);   // snowpack: a smooth bank rising from the road edge; soft beyond the bank
+        if (au <= E) pack = 0;
       }
-      H[k] = h;
+      H[k] = h + pack; C[k] = h + pack - SINK * packIn * (SP > 0 ? 1 : 0);
     }
-    T = { x0, z0, nx, nz, H };
+    T = { x0, z0, nx, nz, H, C };
   }
-  function terrainY(x, z) {
+  function terrainY(x, z, solid) {
     if (!T) return 0;
     const fx = (x - T.x0) / CELL, fz = (z - T.z0) / CELL, i = Math.max(0, Math.min(T.nx - 2, Math.floor(fx))), j = Math.max(0, Math.min(T.nz - 2, Math.floor(fz)));
-    const tx = Math.max(0, Math.min(1, fx - i)), tz = Math.max(0, Math.min(1, fz - j)), H = T.H, k = j * T.nx + i;
+    const tx = Math.max(0, Math.min(1, fx - i)), tz = Math.max(0, Math.min(1, fz - j)), H = solid ? T.C : T.H, k = j * T.nx + i;
     return lerp(lerp(H[k], H[k + 1], tx), lerp(H[k + T.nx], H[k + T.nx + 1], tx), tz);
   }
 
@@ -162,8 +164,8 @@ const Track = (function () {
       const tt = Math.tan(m.t); let nx = -ox * tt - m0.hx * m.slope, nz = -oz * tt - m0.hz * m.slope; const l = Math.hypot(nx, 1, nz);
       out.nx = nx / l; out.ny = 1 / l; out.nz = nz / l;
     } else {
-      out.y = terrainY(x, z);
-      const e = 1, gx = (terrainY(x + e, z) - terrainY(x - e, z)) / (2 * e), gz = (terrainY(x, z + e) - terrainY(x, z - e)) / (2 * e), l = Math.hypot(gx, 1, gz);
+      out.y = terrainY(x, z, true); out.top = terrainY(x, z); out.depth = out.top - out.y;   // off-road: solid ground, and the top of any snowpack
+      const e = 1, gx = (terrainY(x + e, z, true) - terrainY(x - e, z, true)) / (2 * e), gz = (terrainY(x, z + e, true) - terrainY(x, z - e, true)) / (2 * e), l = Math.hypot(gx, 1, gz);
       out.nx = -gx / l; out.ny = 1 / l; out.nz = -gz / l;
     }
     return out;
@@ -217,11 +219,17 @@ const Track = (function () {
         return new THREE.MeshPhongMaterial({ map: waterTex, transparent: true, opacity: 0.62, shininess: 90, specular: 0x9fc4d2, depthWrite: false }); },
       snow: () => new THREE.MeshLambertMaterial({ color: 0xf2f7fb }),
       mud: () => new THREE.MeshPhongMaterial({ shininess: 70, specular: 0x5a4a3a, transparent: true, opacity: 0.93 }),
-      slush: () => new THREE.MeshPhongMaterial({ shininess: 60, specular: 0x8899aa, transparent: true, opacity: 0.8 }) };
+      slush: () => new THREE.MeshPhongMaterial({ shininess: 60, specular: 0x8899aa, transparent: true, opacity: 0.8 }),
+      gravel: () => { const t = canvasTex(256, 256, (g, w, h) => { g.fillStyle = '#8f8a80'; g.fillRect(0, 0, w, h);
+          for (let k = 0; k < 1400; k++) { const r = 1.5 + Math.random() * 4.5, x = Math.random() * w, y = Math.random() * h, v = 95 + Math.random() * 90, tint = Math.random() * 18;
+            g.fillStyle = `rgb(${v + tint},${v + tint * 0.6},${v})`; g.beginPath(); g.ellipse(x, y, r, r * (0.6 + Math.random() * 0.4), Math.random() * 3, 0, 6.3); g.fill();
+            g.fillStyle = 'rgba(0,0,0,0.25)'; g.beginPath(); g.ellipse(x + r * 0.3, y + r * 0.35, r * 0.8, r * 0.4, 0, 0, 6.3); g.fill(); } });
+        t.repeat.set(7, 3.5); return new THREE.MeshLambertMaterial({ map: t, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }); } };
     for (const kind of Object.keys(kinds)) {
-      if (!S.some(m => m.layer === kind && m.sink > 0.01)) continue;
-      const mat = kinds[kind](); if (kind !== 'snow' && kind !== 'water') mat.color = new THREE.Color(S.find(m => m.layer === kind).lcol || 0x888888); else if (kind === 'water') mat.color = new THREE.Color(S.find(m => m.layer === kind).lcol || 0x4a8ea3);
-      const mesh = strip(m => -m.half - 0.3, m => m.half + 0.3, mat, null, kind === 'water' ? 4 : 12, (m, u) => layerTop(m, u) + (kind === 'water' ? -0.02 : 0.005), m => m.layer === kind && m.sink > 0.01);
+      const has = m => m.layer === kind && (m.sink > 0.01 || kind === 'gravel');
+      if (!S.some(has)) continue;
+      const mat = kinds[kind](); if (kind === 'gravel') {} else if (kind !== 'snow' && kind !== 'water') mat.color = new THREE.Color(S.find(m => m.layer === kind).lcol || 0x888888); else if (kind === 'water') mat.color = new THREE.Color(S.find(m => m.layer === kind).lcol || 0x4a8ea3);
+      const mesh = strip(m => -m.half - 0.3, m => m.half + 0.3, mat, null, kind === 'water' ? 4 : kind === 'gravel' ? 14 : 12, (m, u) => layerTop(m, u) + (kind === 'water' ? -0.02 : 0.005), has);
       mesh.renderOrder = kind === 'water' ? 2 : 0; out.push(mesh);
     }
     return out;
@@ -233,7 +241,7 @@ const Track = (function () {
     for (let k = 0; k <= n; k++) {
       const m = S[k % n], e = side * m.E, f = side * (m.E + SHOULDER);
       const ax = m.x + m.ox * e, az = m.z + m.oz * e, bx = m.x + m.ox * f, bz = m.z + m.oz * f;
-      const ay = roadY(m, e) - 0.01, by = Math.min(terrainY(bx, bz), ay) + 0.02;
+      const ay = roadY(m, e) - 0.01, by = look.snowpack ? terrainY(bx, bz) : Math.min(terrainY(bx, bz), ay) + 0.02;   // with a snowpack the shoulder is the bank rising up
       pos.push(ax, ay, az, bx, by, bz); uv.push(ax / 3000 + 0.5, 0.5 - az / 3000, bx / 3000 + 0.5, 0.5 - bz / 3000);
       if (k < n) { const a = k * 2; if (side > 0) idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); else idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
     }
@@ -316,8 +324,8 @@ const Track = (function () {
     const out = [], n = S.length;
     { const g = strip(m => -m.E, m => m.E, null, null, 14).geometry;
       out.push({ vertices: new Float32Array(g.attributes.position.array), indices: new Uint32Array(g.index.array) }); g.dispose(); }
-    { const { x0, z0, nx, nz, H } = T, pos = new Float32Array(nx * nz * 3), idx = [];
-      for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) { const k = j * nx + i; pos.set([x0 + i * CELL, H[k], z0 + j * CELL], k * 3); }
+    { const { x0, z0, nx, nz, C } = T, pos = new Float32Array(nx * nz * 3), idx = [];
+      for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) { const k = j * nx + i; pos.set([x0 + i * CELL, C[k], z0 + j * CELL], k * 3); }
       for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) { const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1; idx.push(a, c, b, b, c, d); }
       out.push({ vertices: pos, indices: new Uint32Array(idx) }); }
     out.push(shoulder(1, true), shoulder(-1, true));
