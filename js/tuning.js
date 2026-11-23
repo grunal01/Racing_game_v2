@@ -5,6 +5,8 @@ const Tuning = (function () {
   const SPEC = [
     ['topSpeed', 'Top speed (m/s)', 20, 90, 1, 'Main'], ['turnRate', 'Steering', 0.5, 4, 0.05, 'Main'],
     ['grip', 'Grip (lower = slides more)', 0.5, 20, 0.1, 'Main'], ['slideMax', 'Most sideways a slide gets (degrees)', 5, 70, 1, 'Main'], ['slideHold', 'Big slides carry further', 0, 0.9, 0.05, 'Main'],
+    ['breakKmh', 'Break speed: hit a breakable wall faster than this (km/h, into the wall)', 30, 250, 5, 'Main'],
+    ['scrape', 'Speed lost when you hit something (more when head-on)', 0, 1, 0.05, 'Impacts'], ['bounce', 'Bounce back off things', 0, 0.8, 0.05, 'Impacts'], ['breakLoss', 'Speed lost breaking through a wall', 0, 0.8, 0.05, 'Impacts'],
     ['accel', 'Acceleration', 4, 40, 0.5, 'Engine and brakes'], ['brake', 'Brakes', 5, 70, 1, 'Engine and brakes'], ['reverse', 'Reverse', 2, 20, 0.5, 'Engine and brakes'],
     ['turnFall', 'Steering kept at speed (higher = sharper at speed)', 15, 300, 5, 'Steering'], ['steerSpeed', 'Steering response', 1, 15, 0.25, 'Steering'],
     ['slideScrub', 'Speed lost while sliding', 0, 1, 0.02, 'Sliding'],
@@ -47,7 +49,7 @@ const Tuning = (function () {
       inp.addEventListener('keydown', e => { if (e.code === 'Tab') { e.preventDefault(); toggle(); } });
     });
     el.querySelector('#tCopy').onclick = () => {
-      const txt = 'R3.1 tuning: ' + JSON.stringify(changed()), ta = el.querySelector('#tOut'); ta.value = txt; ta.style.display = 'block'; ta.select();
+      const txt = 'R3.2 tuning: ' + JSON.stringify(changed()), ta = el.querySelector('#tOut'); ta.value = txt; ta.style.display = 'block'; ta.select();
       try { navigator.clipboard.writeText(txt).catch(() => {}); } catch (e) {}
     };
     el.querySelector('#tReset').onclick = () => { T = Object.assign(T, defaults()); save(); render(); if (onTrack) onTrack(trackOpts()); };
