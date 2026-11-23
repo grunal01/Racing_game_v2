@@ -49,7 +49,7 @@ const Tuning = (function () {
       inp.addEventListener('keydown', e => { if (e.code === 'Tab') { e.preventDefault(); toggle(); } });
     });
     el.querySelector('#tCopy').onclick = () => {
-      const txt = 'R3.2 tuning: ' + JSON.stringify(changed()), ta = el.querySelector('#tOut'); ta.value = txt; ta.style.display = 'block'; ta.select();
+      const txt = 'R3.3 tuning: ' + JSON.stringify(changed()), ta = el.querySelector('#tOut'); ta.value = txt; ta.style.display = 'block'; ta.select();
       try { navigator.clipboard.writeText(txt).catch(() => {}); } catch (e) {}
     };
     el.querySelector('#tReset').onclick = () => { T = Object.assign(T, defaults()); save(); render(); if (onTrack) onTrack(trackOpts()); };
