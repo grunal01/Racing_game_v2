@@ -113,7 +113,10 @@ const Car = (function () {
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(tq), f3 = new THREE.Vector3(0, 0, 1).applyQuaternion(tq);
     const fl = Math.hypot(f3.x, f3.z) || 1, fx = f3.x / fl, fz = f3.z / fl;   // flat forward direction
     const g = Track.surface(c.x, c.z, c.hint); c.hint = g.i; c.ground = g;
-    const sf = Surfaces.at(g, T); c.surf = sf;   // what's under the kart (see surfaces.js)
+    // what's under the kart (see surfaces.js). Its numbers ease over ~0.25 s so crossing from sand to road isn't a jolt
+    const sfT = Surfaces.at(g, T), sf = c.sfs || (c.sfs = Object.assign({}, sfT)), ease = Math.min(1, dt * 4);
+    for (const p of ['grip', 'drag', 'top', 'brake']) sf[p] += (sfT[p] - sf[p]) * ease;
+    sf.name = sfT.name; sf.id = sfT.id; sf.color = sfT.color; c.surf = sf;
     const off = !g.onRoad, top = T.topSpeed * sf.top;
     let contacts = 0; for (let i = 0; i < c.wheels.length; i++) if (v.wheelIsInContact(i)) contacts++;
     const wasAirT = c.airT || 0;

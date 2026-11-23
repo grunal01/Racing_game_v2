@@ -113,8 +113,8 @@ const Track = (function () {
       if (who[k] >= 0) {
         const m = S[who[k]], u = (x - m.x) * m.ox + (z - m.z) * m.oz, au = Math.abs(u), E = m.E;
         nat = m.h * (1 - sstep(E, 65, au)) + noise(x, z) * sstep(E + 10, 60, au) * edgeFade;
-        if (au <= E + 2) h = roadY(m, Math.max(-E, Math.min(E, u))) - 0.6;   // under the road, and a little either side, kept well below it
-        else { const ey = roadY(m, Math.sign(u) * E) - 0.15; h = lerp(ey, nat, sstep(E + 3, E + 34, au)); }
+        if (au <= E) h = roadY(m, u) - 0.6;   // under the road, kept well below it
+        else { const ey = roadY(m, Math.sign(u) * E) - 0.22; h = lerp(ey, nat, sstep(E + 2, E + 34, au)); }   // beside it: level with the edge, then easing out
       }
       H[k] = h;
     }
@@ -188,6 +188,20 @@ const Track = (function () {
     g.setIndex(idx); g.computeVertexNormals();
     const mesh = new THREE.Mesh(g, mat); mesh.receiveShadow = true; return mesh;
   }
+  const SHOULDER = 6;
+  function shoulder(side, forPhysics) {
+    const pos = [], uv = [], idx = [], n = S.length;
+    for (let k = 0; k <= n; k++) {
+      const m = S[k % n], e = side * m.E, f = side * (m.E + SHOULDER);
+      const ax = m.x + m.ox * e, az = m.z + m.oz * e, bx = m.x + m.ox * f, bz = m.z + m.oz * f;
+      const ay = roadY(m, e) - 0.01, by = Math.min(terrainY(bx, bz), ay) + 0.02;
+      pos.push(ax, ay, az, bx, by, bz); uv.push(ax / 3000 + 0.5, 0.5 - az / 3000, bx / 3000 + 0.5, 0.5 - bz / 3000);
+      if (k < n) { const a = k * 2; if (side > 0) idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); else idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+    }
+    if (forPhysics) return { vertices: new Float32Array(pos), indices: new Uint32Array(idx) };
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
+    const mesh = new THREE.Mesh(g, look.groundMat || new THREE.MeshLambertMaterial({ color: look.skirt })); mesh.receiveShadow = true; return mesh;
+  }
   function terrainMesh() {
     const { x0, z0, nx, nz, H } = T, pos = new Float32Array(nx * nz * 3), uv = new Float32Array(nx * nz * 2), idx = [];
     for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) { const k = j * nx + i, x = x0 + i * CELL, z = z0 + j * CELL; pos.set([x, H[k], z], k * 3); uv.set([x / 3000 + 0.5, 0.5 - z / 3000], k * 2); }
@@ -251,7 +265,7 @@ const Track = (function () {
     const red = new THREE.Color(0xd62828), wht = new THREE.Color(0xf5f5f5), kerbMat = new THREE.MeshLambertMaterial({ vertexColors: true });
     const stripe = k => (Math.floor(k / 4) % 2 ? red : wht);
     group.add(strip(m => -m.E, m => -m.half, kerbMat, stripe), strip(m => m.half, m => m.E, kerbMat, stripe));
-    group.add(terrainMesh());
+    group.add(terrainMesh(), shoulder(1), shoulder(-1));
     const tg = tunnelGeo(); if (tg) { const tm = new THREE.Mesh(tg, new THREE.MeshLambertMaterial({ color: look.tunnel || 0x8a7a66, flatShading: true, side: THREE.DoubleSide })); tm.castShadow = tm.receiveShadow = true; group.add(tm); }
     group.add(startLine());
     scene.add(group);
@@ -267,6 +281,7 @@ const Track = (function () {
       for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) { const k = j * nx + i; pos.set([x0 + i * CELL, H[k], z0 + j * CELL], k * 3); }
       for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) { const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1; idx.push(a, c, b, b, c, d); }
       out.push({ vertices: pos, indices: new Uint32Array(idx) }); }
+    out.push(shoulder(1, true), shoulder(-1, true));
     const tg = tunnelGeo(); if (tg) out.push({ vertices: new Float32Array(tg.attributes.position.array), indices: new Uint32Array(tg.index.array) });
     return out;
   }
