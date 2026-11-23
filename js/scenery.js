@@ -174,7 +174,7 @@ const Scenery = (function () {
   function dZoneD() {   // oasis camp: one dense landmark on the outside of the straight, sparse elsewhere
     const S = Track.S.filter(m => m.zone === 'D' && m.kind === 'straight'), m = S[Math.floor(S.length * 0.55)], E = m.E;
     const off = E + 26 + cur.n, cx = m.x + m.ox * off, cz = m.z + m.oz * off, pr = 13 * cur.s;
-    const ring = (n, r0, r1) => Array.from({ length: Math.round(n * cur.d) }, () => { const a = R() * 6.28, r = r0 + R() * (r1 - r0); return { x: cx + Math.cos(a) * r, z: cz + Math.sin(a) * r }; });
+    const ring = (n, r0, r1) => Array.from({ length: Math.round(n * cur.d) }, () => { const a = R() * 6.28, r = r0 + R() * (r1 - r0); return { x: cx + Math.cos(a) * r, z: cz + Math.sin(a) * r }; }).filter(p => Track.clearOf(p.x, p.z) > 3);   // never on the road
     const water = new THREE.Mesh(new THREE.CircleGeometry(pr, 40).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0x3fa3b0, transparent: true, opacity: 0.9 }));
     water.position.set(cx, Track.groundY(cx, cz) + 0.08, cz); group.add(water);
     const wet = new THREE.Mesh(new THREE.CircleGeometry(pr * 1.5, 40).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0x9c8a5a })); wet.position.set(cx, Track.groundY(cx, cz) + 0.04, cz); wet.receiveShadow = true; group.add(wet);
@@ -183,7 +183,7 @@ const Scenery = (function () {
     mix(['flower_yellowA', 'flower_redA'], ring(24, pr * 1.0, pr * 1.6), 0.7, 1.1);
     const camp = ring(5, pr * 2.2, pr * 2.9);
     mix(['tent_detailedOpen', 'tent_smallClosed'], camp, 3, 4.5, null, 0xe6d3b0);
-    instance('campfire_stones', [{ x: cx + pr * 2.0, z: cz, h: 0.5 }]); instance('campfire_logs', [{ x: cx + pr * 2.0, z: cz, h: 0.7 }]);
+    if (Track.clearOf(cx + pr * 2.0, cz) > 3) { instance('campfire_stones', [{ x: cx + pr * 2.0, z: cz, h: 0.5 }]); instance('campfire_logs', [{ x: cx + pr * 2.0, z: cz, h: 0.7 }]); }
     instance('log_stack', ring(2, pr * 2.3, pr * 2.6).map(p => Object.assign(p, { h: 1.2, ry: R() * 6 })));
     // sparse elsewhere in the zone
     mix(['tree_palmShort', 'tree_palmBend'], spots('D', 10, 1, 6, 50).concat(spots('D', 6, -1, 4, 30)), 6, 11);

@@ -95,19 +95,19 @@ const Effects = (function () {
     const sliding = slide > 4, marking = !car.air && (loose ? speed > 2 : sliding);
     rear.forEach((w, i) => {
       wp.copy(w.at).applyQuaternion(car.mesh.quaternion).add(car.mesh.position);
-      const gy = Track.surface(wp.x, wp.z, car.hint).y, tr = tracks[i];
+      const gs = Track.surface(wp.x, wp.z, car.hint), gy = gs.y, top = gs.top == null ? gy : gs.top, tr = tracks[i];   // ground, and the top of any water/snow/mud layer
       // tracks
       if (marking) {
         const col = fam === 'tarmac' ? 0x1b1b1b : fam === 'ice' ? 0xffffff : fam === 'snow' ? 0x9fb1bf : new THREE.Color(sf.color).multiplyScalar(fam === 'mud' ? 0.45 : 0.62).getHex();
         const a = fam === 'tarmac' ? Math.min(0.7, slide / 18) : fam === 'ice' ? 0.45 : fam === 'water' ? 0.3 : fam === 'snow' ? 0.8 : 0.75;
-        lay(tr, wp.x, gy + 0.04, wp.z, Math.max(0.55, w.r * 1.8), col, a);
+        lay(tr, wp.x, (fam === 'snow' || fam === 'mud' || fam === 'slush' ? top : gy) + 0.04, wp.z, Math.max(0.55, w.r * 1.8), col, a);
       } else tr.last = null;
       if (car.air) return;
       // particles: how many this frame
       const rate = ((loose ? speed * 1.6 : 0) + (sliding ? slide * (fam === 'tarmac' ? 2 : 1.4) : 0)) * (sf.spray == null ? 1 : sf.spray);   // per-surface spray amount (surfaces.js)
       let n = rate * dt; while (n > 0) {
         if (n < 1 && Math.random() > n) break; n -= 1;
-        const rx = (Math.random() - 0.5), rz = (Math.random() - 0.5), y = gy + 0.15;
+        const rx = (Math.random() - 0.5), rz = (Math.random() - 0.5), y = top + 0.15;
         switch (fam) {
           case 'mud': emit(wp.x, y, wp.z, -fx * speed * 0.15 + rx * 4, 3 + Math.random() * 4, -fz * speed * 0.15 + rz * 4, 0.9, 0.35, 0.3, 16, 0.5, new THREE.Color(sf.color).multiplyScalar(0.8).getHex(), 0.95); break;
           case 'water': emit(wp.x, y, wp.z, -fx * speed * 0.06 + rx * 3, 1.2 + Math.random() * 2.2, -fz * speed * 0.06 + rz * 3, 0.55, 0.35, 0.9, 11, 0.8, 0xdcf0f7, 0.55); break;
